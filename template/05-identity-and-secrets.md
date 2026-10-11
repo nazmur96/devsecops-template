@@ -77,6 +77,7 @@ Three kinds of identity, three mechanisms:
 - [ ] `sub` pinned to a branch or environment, **never `repo:<org>/<repo>:*`** (reference 06's trust allowed any branch or PR to assume the role)
 - [ ] **Negative tests:** a workflow on another branch fails to assume the role; the build role can't call `ec2:*` or `iam:*`
 - [ ] Workflows declare `permissions: { id-token: write, contents: read }`; nothing broader by default
+- [ ] **Single account = IAM is your only wall between environments** (P0-6, Phase 12). So every CI and workload policy names its resources by environment (`arn:…:sockshop/dev/*`, `sockshop-dev-*`) or uses tag conditions (`aws:ResourceTag/Environment = dev`). **No `"Resource": "*"`** on anything that can write. **Negative test:** the dev CI role can't read a prod secret, push to a prod-only repository, or describe the prod cluster
 - [ ] **No deploy role for app CI at all.** With GitOps (P8), CI only pushes images and commits to the GitOps repo; Argo CD deploys from inside the cluster. If you must push-deploy (references 02/04), scope it like reference 04: Access Entry + `AmazonEKSEditPolicy` limited to one namespace, one role per environment
 
 ---

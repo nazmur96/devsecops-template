@@ -78,6 +78,15 @@ Whichever you pick:
   - the **Amazon CloudWatch Observability** EKS add-on (CloudWatch agent + Fluent Bit, also gives Container Insights), with Pod Identity
   - or the **ADOT collector** with a logs pipeline
 - [ ] One log group per environment/namespace (e.g. `/sockshop/dev/application`), **retention set** (7 days dev, 30 days prod)
+
+> **Other log stack you'll hear about: EFK / ELK** (Fluent Bit or Fluentd →
+> Elasticsearch → Kibana; reference 09). The AWS-managed version is **Amazon
+> OpenSearch Service** (OpenSearch Dashboards instead of Kibana), fed by Fluent
+> Bit or the ADOT collector. **Use it instead of CloudWatch Logs when** you need
+> heavy full-text search and aggregations over large log volumes, long
+> retention at a lower cost per GB, or the team already knows Kibana. It's a
+> cluster you size and pay for even when idle (or use OpenSearch Serverless);
+> CloudWatch Logs needs no sizing. Pick one per environment (ADR).
 - [ ] Apps log structured JSON to stdout, including the **trace ID** (P10-3), so a log line links to its trace
 - [ ] **Prove it:** one CloudWatch Logs Insights query returns all errors for `orders` across every pod in the last hour:
   ```

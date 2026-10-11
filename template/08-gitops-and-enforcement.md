@@ -193,6 +193,29 @@ spec:
 
 ---
 
+## P8-4c Integration and API tests in staging
+
+**Type:** Story · *Use when: always (reference 09: staging runs integration/API tests before anyone opens the prod promotion PR)*
+
+The smoke test (P8-4b) checks that the happy path works. Integration and
+API tests check that **every endpoint** behaves correctly, including errors,
+against real dependencies (databases, queues), which unit tests in CI can't do.
+
+| Test type | Checks | Example tools |
+|---|---|---|
+| **API tests** | Each endpoint: status codes, response shape, auth (401/403), validation errors (400), not-found (404) | Postman collections run by **Newman**, Bruno CLI, **k6** checks, Hurl, or the app's own test suite |
+| **Integration tests** | Services working together: an order created via the API appears in the DB and puts a message on the queue | The app's test suite pointed at staging, Testcontainers-style suites, k6 scenarios |
+| **Contract tests** (optional) | A provider doesn't break what its consumers expect | Pact |
+
+- [ ] Test suite lives in the app repo (`tests/api/`), runs as an image like the smoke test, triggered after every staging sync (Argo CD PostSync hook or a workflow listening for the sync notification)
+- [ ] Uses a **test account and test data**, cleaned up afterwards; never depends on data someone created by hand
+- [ ] Results reported as a **commit status on the gitops repo**, and made a **required check on the prod promotion PR** (P7-5): no green staging tests, no promotion
+- [ ] The **ZAP scan** (P10-6) runs in the same stage
+- [ ] Failures notify the team (P8-3a) with a link to the report
+- [ ] **Prove it:** a change that returns 500 on one endpoint passes CI (unit tests) but is caught here, and the promotion PR can't merge
+
+---
+
 ## P8-5 Pod Security Admission everywhere
 
 **Type:** Task

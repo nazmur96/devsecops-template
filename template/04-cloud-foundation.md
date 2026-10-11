@@ -201,6 +201,7 @@ resource "aws_eks_addon" "pod_identity_agent" {
 | eks-pod-identity-agent | `aws_eks_addon` | — |
 | aws-ebs-csi-driver + `gp3` StorageClass (encrypted, `WaitForFirstConsumer`) | `aws_eks_addon` | Pod Identity |
 | metrics-server | `aws_eks_addon` | — |
+| cert-manager (needed by the ADOT/OTel operator in P10, and by Linkerd if used) | `aws_eks_addon` (community add-on) or Helm | — |
 | AWS Load Balancer Controller | `helm_release` (or Argo CD from P8) | Pod Identity |
 | ExternalDNS (P9), Karpenter (P6), External Secrets (P5) | add-on / Helm, later phases | Pod Identity |
 

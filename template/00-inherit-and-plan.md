@@ -138,16 +138,25 @@ this template adopts:
 Cluster 1: non-prod          Cluster 2: prod
 ├── namespace dev            └── namespace prod (or one namespace per team)
 ├── namespace qa
-└── namespace ppd
+└── namespace staging      (= ppd)
 ```
 
-- **Non-prod environments share one cluster**, separated by namespaces with quotas, RBAC per team, NetworkPolicy, and separate Argo CD Applications and gitops folders (`envs/dev`, `envs/qa`, `envs/ppd`)
+- **Non-prod environments share one cluster**, separated by namespaces with quotas, RBAC per team, NetworkPolicy, and separate Argo CD Applications and gitops folders (`envs/dev`, `envs/qa`, `envs/staging`)
 - **Prod gets its own cluster**: a bad change, a noisy test or a compromised dev workload can't touch it
 - **No always-on DR cluster.** Running a second prod 365 days a year for a rare event is rarely worth the cost. Instead, DR is **recreated on demand** from Terraform + the gitops repo + backups (P10-9), and that recreation is rehearsed. Only build a warm standby in a second region (P10-11) when the business's RTO is shorter than the time it takes to recreate. Write the decision down with the RTO it gives you
 - `ppd` is what this template calls **staging**; pick one name and use it everywhere (P0-12)
 
 - [ ] Environments named (`dev`, `staging`, `prod`, plus `qa` if you have a test team), each with a purpose (reference 03: staging must be *stable*, unlike dev)
 - [ ] Cluster layout decided (default above) and the **DR approach written down**: on-demand rebuild (default) or warm standby, with the RTO each gives
+
+**One AWS account or several?** This template starts with **one account**
+(a house with locked rooms: the locks are your IAM policies, names and tags).
+Real companies usually give each environment its **own account** (separate
+houses: nothing crosses unless you build a door on purpose). Learn in one
+account first; move to several once you've done a few projects. Everything
+that changes is written down in [Phase 12](12-multi-account.md).
+
+- [ ] ADR: single account for now, with the trigger that would make you move (real customer data, a second team, compliance)
 - [ ] Promotion rule: **the same image digest** moves dev → staging → prod; nothing is rebuilt (reference 04's retag idea, done correctly)
 - [ ] Branching model chosen: **trunk-based** (short feature branches → `main`, environments via GitOps folders) is the default; reference 04's `feature → qa → main` works but duplicates pipelines
 - [ ] ADR written
@@ -270,7 +279,7 @@ what's what. Pick a pattern now, before the first resource exists.
 | Terraform | modules `snake_case` folders; resources named by role (`this`, `main`), not by env | `module "vpc"`, `aws_eks_cluster.this` | `tflint` |
 | Git branches | `{type}/{ticket}-{short}` | `feat/P5-3-github-envs`, `fix/P3-8-prestop` | branch-name check (optional) |
 | Commits | **Conventional Commits** | `feat(carts): add startupProbe` | commitlint pre-commit hook (optional) |
-| Environments | exactly `dev`, `staging`, `prod` (not `development`, `production`, `prd`) | | everywhere |
+| Environments | exactly `dev`, `qa` (only if you have a test team), `staging`, `prod`; not `development`, `production`, `prd`, and pick `staging` **or** `ppd`, never both | | everywhere |
 | DNS | `{service}.{env}.{domain}`, prod without `{env}` | `shop.dev.example.com`, `shop.example.com` | review |
 
 - [ ] `docs/conventions.md` committed with this table, adapted

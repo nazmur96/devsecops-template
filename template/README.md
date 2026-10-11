@@ -11,7 +11,7 @@ Alternatives appear only as one-line ADR notes, never as parallel tracks.
 It is the merge of:
 
 - the user's own **Sock Shop plan** (`reference/07`): its epic → ticket → acceptance-criteria format and its drills
-- the **best part of each reference project** (`reference/01`–`06`)
+- the **best part of each reference project** (`reference/01`–`09`)
 - the **three-layer model** from [`../DEVSECOPS-GUIDE.md`](../DEVSECOPS-GUIDE.md)
 - the user's **workstation rules** (`~/orca/projects/gitops-workstation`): mise or devenv, devcontainer, DevPod, Skaffold/Tilt + mirrord
 
@@ -57,6 +57,7 @@ Swap in your own app; the steps don't change.
 | 9 | [Edge](09-edge.md) | HTTPS, DNS, WAF, zero-downtime rollouts at the load balancer | L1 | 06, user Section 11 |
 | 10 | [Observe & operate](10-observe-and-operate.md) | Metrics, logs, traces, SLOs, runtime detection, DR, chaos, cost | Runtime | 06, 07 |
 | 11 | [Present it](11-present-it.md) | README, evidence, ADRs, resume bullets, interview story | — | 04, 05 |
+| 12 | [Multi-account (later)](12-multi-account.md) | One AWS account per environment: Organizations, SCPs, cross-account doors. **After a few projects** | L1 | 09, user notes |
 | — | [Common mistakes](COMMON-MISTAKES.md) | Everything the reference projects got wrong, in one list | — | all |
 
 ---
@@ -88,6 +89,9 @@ P0 Plan
           └─────────┬─────────┘
                     ▼
               P11 Present it
+                    │   (after a few projects)
+                    ▼
+              P12 Multi-account
 ```
 
 - **P4 does not depend on P3.** Terraform for the VPC/IAM/registry can be written while you learn Kubernetes locally.

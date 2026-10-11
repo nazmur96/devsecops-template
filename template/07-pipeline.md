@@ -109,6 +109,15 @@ jobs:
 | Lint + unit tests | per language (golangci-lint, ESLint, Checkstyle) | errors; coverage threshold | bugs |
 | SAST | Semgrep or SonarQube quality gate | new critical issues / coverage below threshold | SQL injection, XSS paths in **your** code |
 
+> **Why secrets are scanned in the PR, not after merge** (reference 09): once a
+> commit with a secret is merged to `main`, it's in the Git history, cloned
+> by every developer and CI runner, and possibly forked. Deleting the file
+> later doesn't remove it from history. Catch it in the PR. If one gets
+> through anyway: **rotate the secret first** (assume it's stolen), then
+> check its usage logs (e.g. CloudTrail for AWS keys), then rewrite history
+> (`git filter-repo`) if you must. Rotation is the fix; history rewriting
+> is only tidying up.
+
 - [ ] Every job is a **required status check** in branch protection
 - [ ] Path filters so a docs change doesn't build eight Java services
 - [ ] **Prove each gate fails:** a PR with a fake key, an unpinned `apk add`, a public S3 bucket, a vulnerable dependency, and a deliberate SQL injection. All five are blocked
