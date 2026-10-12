@@ -144,11 +144,13 @@ tools you use to **recover**. If an app's memory leak or a noisy batch job
 starves the node they share, you lose the dashboards and the deploy path at
 the exact moment you need them.
 
-- [ ] The **managed node group** (P4-5) becomes the **platform pool**: taint it `dedicated=platform:NoSchedule`; give Argo CD, Karpenter, Kyverno, External Secrets, cert-manager and the collectors a matching toleration + `nodeSelector`. Apps run on Karpenter's NodePools (P6-6)
-- [ ] A Kyverno rule (P8-6) **rejects that toleration outside the platform namespaces**. A taint is only advisory to anyone who can write a toleration
+- [ ] The **managed node group** (P4-5) becomes the **platform pool**: taint it `dedicated=platform:NoSchedule`; give the platform tools that exist **now** (Karpenter, External Secrets, cert-manager, the AWS Load Balancer Controller, metrics-server) a matching toleration + `nodeSelector` in their Helm/add-on values. Apps run on Karpenter's NodePools (P6-6)
+- [ ] **Every platform tool you install later gets the same toleration as you install it:** Argo CD and Kyverno (P8), the collectors and Falco (P10). Write it into `docs/conventions.md` so nobody forgets
+- [ ] Check where the EKS add-on Deployments ended up (`kubectl get pods -n kube-system -o wide`): CoreDNS on app nodes is fine; if you want it on the platform pool, set the toleration in the add-on's configuration values
+- [ ] A taint is only advisory to anyone who can write a toleration: in P8-6 you add a Kyverno rule that rejects it outside the platform namespaces
 - [ ] **PriorityClass:** `platform-critical` for the tools above, `business-critical` for the **1–2 services in the CUJ that matter most** (checkout, payment), default for the rest. Under pressure the scheduler evicts low priority first. Don't mark everything critical: then nothing is
 - [ ] **[OPT] NodeLocal DNSCache** (*use when:* you run dozens of services, or see DNS timeouts under load): a per-node DNS cache in front of CoreDNS
-- [ ] **Prove it:** fill the app nodes with a memory-hog Deployment → app pods get evicted or go `Pending`, but Argo CD and Grafana stay up and usable
+- [ ] **Prove it:** fill the app nodes with a memory-hog Deployment → app pods get evicted or go `Pending`, but Karpenter and External Secrets keep running on the platform pool. Repeat the drill after P8 and P10 to confirm Argo CD and Grafana also stay up
 
 ---
 

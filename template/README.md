@@ -112,6 +112,7 @@ logically, but they need something built later. Each is marked ⏸ in its phase.
 | [P8-8](08-gitops-and-enforcement.md#p8-8-progressive-delivery-with-argo-rollouts) Argo Rollouts canary | P8 | P9 **and** P10-1 | Splits traffic at the ALB (P9) and decides from AMP metrics (P10-1) |
 | [P6-2](06-run-it-well.md#p6-2-replicas-and-autoscaling) HPA against the SLO | P6 | P10-7 | P6 proves scaling with a simple load loop; P10-7 proves it against the p95 SLO with k6 |
 | [P6-5b](06-run-it-well.md#p6-5b-platform-node-pool-and-priorityclass) platform node pool | P6 | P6-6 | Apps need Karpenter's NodePools before the managed node group can be tainted for platform tools |
+| [P4-9](04-cloud-foundation.md#p4-9-managed-data-stores-where-the-app-allows) [OPT] RDS IAM auth | P4 | P5-4 | The pod needs its Pod Identity role before it can request a database token |
 
 When you finish P10, come back to this table and close every row.
 

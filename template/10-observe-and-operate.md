@@ -213,7 +213,7 @@ EKS-only template (see P0-13: real systems mix them).
 
 ```
 S3 bucket policy / ACL / public-access-block changed
-  → CloudTrail (a trail must be on) → EventBridge rule
+  → CloudTrail (the trail from P4-10) → EventBridge rule
   → Lambda (Python + boto3): verify it's really public → re-apply the public access block
   → tag the bucket with what changed it and why → post to the alert channel
   → failures to a DLQ, with an alarm on the DLQ

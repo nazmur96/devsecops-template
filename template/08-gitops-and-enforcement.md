@@ -276,6 +276,7 @@ spec:
   - [ ] an image from Docker Hub
   - [ ] a pod without resource limits
 - [ ] Kyverno failure mode chosen and documented (fail-closed for app namespaces; system namespaces excluded so a Kyverno outage can't block recovery)
+- [ ] **Platform-pool toleration** (P6-5b): a rule that rejects the `dedicated=platform` toleration in any namespace that isn't a platform namespace
 - [ ] **Labels for cost and ownership:** a `require-labels` rule for `app.kubernetes.io/part-of` and a `team` label on every workload (P0-12). Cost allocation (P10-10c) is only as good as these labels
 - [ ] **Mutating policies vs Argo CD:** if a Kyverno rule *adds* something at admission (a default label, a sidecar, a tag rewritten to a digest) that isn't in Git, Argo CD sees live ≠ Git and the app stays **OutOfSync forever**. Fix it by putting the field in Git (preferred; this is why CI writes digests, not tags) or with `ignoreDifferences` on exactly that field in the Application. Never by turning off self-heal
 
@@ -423,7 +424,7 @@ deployed before it's switched on.
 | LaunchDarkly / Unleash | A team that wants a flags UI for product managers |
 
 - [ ] The app calls the **OpenFeature** SDK (CNCF standard), never a vendor SDK directly, so changing backends is a provider config change, not a rewrite of every `getFlag` call
-- [ ] One flag targets **internal users only**; one is a **kill switch** linked from the relevant alert's runbook (P10-4)
+- [ ] One flag targets **internal users only**; one is a **kill switch**. Once alert runbooks exist (P10-4), link the kill switch from the relevant one
 - [ ] Every flag has an owner and a removal date. Old flags are dead code paths nobody tests
 - [ ] **Prove it:** the kill switch turns a feature off for all users within a minute, with no deploy and no pod restart
 

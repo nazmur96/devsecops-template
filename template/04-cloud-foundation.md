@@ -316,7 +316,7 @@ then pulls dependencies from **one place you control**.
 - [ ] **When the app can't connect**, debug in gate order (from the database article above): `Connection timed out` = security group/network; `Connection refused` = nothing listening; `no pg_hba.conf entry` = DB access rules; `password authentication failed` = credentials. Test with `kubectl run -it --rm dbg --image=postgres:16 -- psql -h <endpoint> -U app -d mydb` from inside the cluster
 - [ ] Dev vs prod in tfvars: `multi_az`, `deletion_protection`, `backup_retention_period`, `skip_final_snapshot = false` in prod
 - [ ] **Connection limits:** sum `peak connections per pod × maxReplicas` across every service using the database (from the manifests, P0-2b) and compare it with the instance's `max_connections`. If a scale-out could exceed it, add pooling in the app, or **RDS Proxy** in front. "The database fell over" during a traffic spike is very often this
-- [ ] **[OPT] RDS IAM authentication** (*use when:* you want no database password at all): the pod's Pod Identity role gets `rds-db:connect`, and the app requests a 15-minute token instead of a stored password. Fewer secrets to rotate
+- [ ] **[OPT] RDS IAM authentication** (*use when:* you want no database password at all; ⏸ wire it after Pod Identity exists, P5-4): the pod's Pod Identity role gets `rds-db:connect`, and the app requests a 15-minute token instead of a stored password. Fewer secrets to rotate
 - [ ] **Why you might leave RDS later** (write it in the ADR so you'd recognise it): avoiding cloud lock-in, cost at large scale *if* you already run Kubernetes maturely, data sovereignty or air-gapped rules, or running everything on one platform. Without one of those, RDS is the right default. (SQLite + Litestream is a third option, but only for single-writer apps on one node)
 - [ ] **[OPT] Operator paradigm** (*use when:* you want to learn the operator pattern or can't use a managed database): CloudNativePG in-cluster vs RDS, with failover and PITR drills and an ADR comparing RTO/RPO, cost and on-call burden (reference 07, SOCKPLAT-52–55)
 
@@ -328,6 +328,7 @@ then pulls dependencies from **one place you control**.
 
 - [ ] `checkov -d platform/` clean (or justified skips): runs in CI from P7
 - [ ] **[OPT] Terratest** (*use when:* your modules are reused by other teams or environments, so a broken module breaks many things): apply the VPC module to a throwaway workspace, assert subnets/tags/SG rules (e.g. "no data-store SG allows `0.0.0.0/0`"), destroy
+- [ ] **CloudTrail trail** in Terraform: management events for the account to an encrypted S3 bucket with a lifecycle rule (e.g. 90 days), log-file validation on. The console's 90-day Event history works without it, but drift alerts below, EventBridge-driven automation (P10-5c) and any real investigation need a trail
 - [ ] **Drift detection:** scheduled `terraform plan -detailed-exitcode` in CI (exit 2 = drift → alert); a CloudTrail/EventBridge rule for console changes to SGs. **Drill:** add an SG rule in the console, see the alert
 - [ ] **Cost:** budget alert (P0-7); `make destroy` documented; optional scheduled scale-to-zero of dev node groups at night
 
