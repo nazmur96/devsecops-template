@@ -464,7 +464,10 @@ and on EKS. See [P9](template/09-edge.md#why-gateway-api-adr).
 <summary><b>Do I need Cilium, Hubble or a service mesh?</b></summary>
 
 No. EKS uses the AWS VPC CNI by default, and Hubble only exists if Cilium is
-your CNI. A service mesh (Linkerd, Istio ambient, Cilium) is optional:
+your CNI. To learn Cilium for free, swap it in on KinD
+([P3-7b](template/03-local-kubernetes.md#p3-7b-opt-cilium-instead-of-kindnet-hubble-l7-policy-wireguard)).
+[P8-7](template/08-gitops-and-enforcement.md#p8-7-networkpolicy-on-eks) says when Cilium on EKS is worth it.
+A service mesh (Linkerd, Istio ambient, Cilium) is optional too:
 [P8-11](template/08-gitops-and-enforcement.md#p8-11-opt-service-mesh-and-mtls-when-and-how)
 explains when it's worth it.
 </details>

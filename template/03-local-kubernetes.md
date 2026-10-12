@@ -276,12 +276,79 @@ spec:
 
 Then one allow policy per real call from the dependency diagram (P0-2).
 
-- [ ] **First prove enforcement exists:** with only `default-deny` applied, a `curl` between two pods must **fail**. If it succeeds, your CNI ignores NetworkPolicy. Recent KinD (kindnet) enforces it; otherwise install Calico or Cilium
+- [ ] **First prove enforcement exists:** with only `default-deny` applied, a `curl` between two pods must **fail**. If it succeeds, your CNI ignores NetworkPolicy. Recent KinD (kindnet) enforces it; otherwise install Calico, or Cilium ([P3-7b](#p3-7b-opt-cilium-instead-of-kindnet-hubble-l7-policy-wireguard))
 - [ ] Apply deny-all → watch DNS break → allow DNS → add allows call by call until the CUJ passes
 - [ ] **Negative test:** `front-end` cannot reach `carts-db` directly
 
 > Reference 01 was the only project with NetworkPolicies. Doing it here, with
 > fast feedback, makes it a 1-day task instead of a week of cloud debugging.
+
+---
+
+## P3-7b [OPT] Cilium instead of kindnet (Hubble, L7 policy, WireGuard)
+
+> **Use when:** you want to learn Cilium for free before a homelab (Talos) or
+> a Cilium-on-EKS project, or you're stuck on "why is this connection
+> blocked?". **Skip it** on a pure EKS path: EKS uses the VPC CNI, and
+> **Hubble only exists when Cilium is the CNI**. Background:
+> [Kubernetes traffic stack: a Cilium-first setup](https://claude.ai/artifact/BDopFWFZhkTaizFShXurbF).
+
+**What you get that kindnet doesn't have:**
+
+| Feature | What it does | Why it matters |
+|---|---|---|
+| **Hubble** | Shows every network flow: who called whom, and whether policy **allowed or dropped** it | Debugging NetworkPolicy goes from guessing to reading |
+| **L7 `CiliumNetworkPolicy`** | Rules on HTTP method and path, not just IP and port | "`front-end` may only `GET /catalogue`", not "may reach port 80" |
+| **WireGuard encryption** | Encrypts pod traffic between nodes | Matters on bare metal; on AWS, supported Nitro instance types already encrypt traffic between instances |
+| **kube-proxy replacement** | Service load balancing in eBPF instead of iptables | Faster at scale, and one less component |
+
+**Steps:**
+
+- [ ] Add `cilium-cli` and `hubble` to `mise.toml` (P1-2); they're client tools, not host packages
+- [ ] A second cluster config (`kind/cluster-cilium.yaml`) that turns off the defaults Cilium replaces:
+
+```yaml
+networking:
+  disableDefaultCNI: true   # no kindnet
+  kubeProxyMode: none       # Cilium replaces kube-proxy
+```
+
+- [ ] Install, with Cilium's own Gateway API **off** so it doesn't fight Envoy Gateway (P3-6) over the same `Gateway`s:
+
+```bash
+cilium install \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=sockshop-external-load-balancer --set k8sServicePort=6443 \
+  --set hubble.relay.enabled=true --set hubble.ui.enabled=true \
+  --set encryption.enabled=true --set encryption.type=wireguard
+cilium status --wait          # all green; "Encryption: Wireguard"
+```
+
+  (`k8sServiceHost` is KinD's API load-balancer container when you run 3 control planes; with one control plane it's `sockshop-control-plane`.)
+- [ ] `cilium connectivity test` passes
+- [ ] Re-run P3-7 on this cluster: the standard NetworkPolicies work unchanged
+- [ ] **See the denies:** `cilium hubble port-forward &` then `hubble observe -n sock-shop --verdict DROPPED` while you test `front-end` → `carts-db`. Each dropped flow names its source, destination and port. `cilium hubble ui` shows the same as a live service map
+- [ ] **One L7 rule**, proven with a negative test:
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: front-end-reads-catalogue, namespace: sock-shop }
+spec:
+  endpointSelector: { matchLabels: { app.kubernetes.io/name: catalogue } }
+  ingress:
+    - fromEndpoints: [{ matchLabels: { app.kubernetes.io/name: front-end } }]
+      toPorts:
+        - ports: [{ port: "80", protocol: TCP }]
+          rules: { http: [{ method: GET, path: "/catalogue.*" }] }
+```
+
+  `GET /catalogue` from `front-end` → 200; `POST /catalogue` → **403 from Cilium**, visible in `hubble observe --protocol http`
+- [ ] **Prove encryption:** `cilium encrypt status` shows WireGuard peers. Optionally `tcpdump` on a node's interface shows UDP 51871 (WireGuard), not plain HTTP
+
+> **Common mistake:** two Gateway API controllers (Cilium's and Envoy
+> Gateway) both claiming the same `Gateway`. Keep one, or give each its own
+> `GatewayClass`.
 
 ---
 
@@ -361,7 +428,7 @@ uses**; only the collector's export target changes.
 |---|---|---|
 | MetalLB (L2) or `cloud-provider-kind` | `type: LoadBalancer` with no cloud | AWS NLB/ALB |
 | NFS / Longhorn StorageClass + node-loss test | Volumes that survive node loss | EBS CSI |
-| Cilium + Hubble, L7 `CiliumNetworkPolicy` | eBPF networking, HTTP-aware policy, flow visibility | VPC CNI |
+| Cilium + Hubble, L7 `CiliumNetworkPolicy` (learn it in [P3-7b](#p3-7b-opt-cilium-instead-of-kindnet-hubble-l7-policy-wireguard)) | eBPF networking, HTTP-aware policy, flow visibility | VPC CNI |
 
 ---
 

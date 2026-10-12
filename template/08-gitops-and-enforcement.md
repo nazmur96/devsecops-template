@@ -291,6 +291,18 @@ spec:
 - [ ] The policies proven in P3-7 applied via Argo CD; Kyverno generates default-deny for new namespaces
 - [ ] **Negative tests:** `front-end` → `carts-db` blocked; cross-namespace traffic blocked; DNS works
 - [ ] The CUJ passes with all policies enforced
+- [ ] **See what policy blocked, don't guess.** On the VPC CNI, turn on the network policy agent's logs in the `vpc-cni` add-on configuration (`nodeAgent.enablePolicyEventLogs`, optionally `nodeAgent.enableCloudWatchLogs`) and find the denied flows in them. If you run Cilium, use `hubble observe --verdict DROPPED` instead (learned in P3-7b)
+
+> **Cilium on EKS instead of the VPC CNI? [OPT]**
+> **Use when** (any one is enough): you need **L7 policies** (HTTP method/path
+> rules) or DNS-name egress rules; you want **Hubble** flow visibility in
+> production; you connect several clusters with **Cluster Mesh**; or you want
+> **one networking stack** for EKS and on-prem/homelab clusters.
+> **Don't** switch just to try it. It means running Cilium in chaining mode
+> next to the VPC CNI, or replacing it (ENI mode). AWS support for pod
+> networking gets murkier, and one Cilium upgrade can break networking,
+> policy and ingress at once. Write an ADR, and test upgrades in a staging
+> cluster first. Background: [Kubernetes traffic stack: a Cilium-first setup](https://claude.ai/artifact/BDopFWFZhkTaizFShXurbF).
 
 ---
 
