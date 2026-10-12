@@ -293,7 +293,7 @@ and incidents (P10-8).
 
 > **Use when:** tracing works (P10-3) and you want diagnosis practice on a system much bigger than yours.
 
-From reference 07's plan, once tracing works:
+From reference 07's plan, once tracing works. These are steps 6 and 7 of the [practice-app ladder](../PRACTICE-APPS.md#6-teastore-first-diagnosis-drill):
 
 - [ ] **TeaStore** (5 services + a service registry): deploy, wire tracing, inject one fault, diagnose from traces
 - [ ] **TrainTicket** (~40 services) + its fault-replication benchmark: diagnose F1 (async ordering race), F3 (JVM limit above the cgroup limit, the `MaxRAMPercentage` lesson), F5 (thread-pool exhaustion cascade) **before** reading their write-ups; record time to diagnosis

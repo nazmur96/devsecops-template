@@ -34,6 +34,7 @@ production-grade platform on AWS EKS, one provable step at a time.**
 - [Key decisions at a glance](#key-decisions-at-a-glance)
 - [Golden rules](#golden-rules)
 - [How to use it](#how-to-use-it)
+- [Which app to practise on](#which-app-to-practise-on)
 - [FAQ](#faq)
 - [Repo map](#repo-map)
 - [Credits](#credits)
@@ -107,7 +108,7 @@ Everything that runs is watched, alerted on and backed up.
   of them got wrong.
 - **A worked example throughout:** [Sock Shop](https://github.com/microservices-demo/microservices-demo):
   8 services in Go, Java and Node, plus MongoDB, MySQL and RabbitMQ. Swap in
-  your own app; the steps don't change.
+  your own app; the steps don't change. Sock Shop is archived upstream, so for a real run use the [practice-app ladder](PRACTICE-APPS.md).
 
 ---
 
@@ -418,6 +419,25 @@ says where the reference projects differ.
 
 ---
 
+## Which app to practise on
+
+The worked example in the text is Sock Shop, but Sock Shop is **archived**
+upstream. To actually run the template, follow the
+[practice-app ladder](PRACTICE-APPS.md): seven apps in order, each adding
+something the previous ones didn't.
+
+| # | App | Role |
+|---|---|---|
+| 1 | Podinfo | Platform smoke test |
+| 2 | **AWS Retail Store** | **Main project: the full P0 → P11 run** |
+| 3 | Online Boutique | Second app: prove the template transfers |
+| 4 | OpenTelemetry Demo | Observability practice with switchable failures |
+| 5 | Bank of Anthos | Security focus |
+| 6 | TeaStore | First diagnosis drill |
+| 7 | Train-Ticket + fault-replicate | Final hard mode: 22 real failures in 41 services |
+
+---
+
 ## FAQ
 
 <details>
@@ -501,6 +521,7 @@ why the budget alert comes first.
 │   ├── README.md          phase map, dependency graph, decisions, explainers
 │   ├── 00-…12-*.md        one file per phase: Goal, Why, tickets, Prove it, mistakes
 │   └── COMMON-MISTAKES.md everything the reference projects got wrong, by phase
+├── PRACTICE-APPS.md       which app to run through the template, in what order
 ├── DEVSECOPS-GUIDE.md     the three-layer model the template is built on
 └── reference/             reviews of the 9 projects the template was merged from
 ```
