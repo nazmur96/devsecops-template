@@ -180,6 +180,56 @@ Matching the managed-first choice, two layers:
 
 ---
 
+## P10-5b Account-level posture (Security Hub + Config)
+
+**Type:** Story
+
+**Why:** everything so far watches the **cluster**. Nothing watches the
+**account**: an S3 bucket someone made public "for a minute", an IAM role
+unused for eight months, a security group open to the world. These are found
+by an outside assessment, or by an attacker.
+
+- [ ] **AWS Config** recording, limited to the resource types you care about (Karpenter's node churn makes "record everything" noticeably expensive)
+- [ ] **Security Hub** with the **AWS Foundational Security Best Practices** and **CIS** standards; it also collects GuardDuty (P10-5) and Inspector findings in one place
+- [ ] Findings at HIGH/CRITICAL routed to the same SNS path as other alerts
+- [ ] **Expect hundreds of findings on day one.** Plan a triage session: fix, or suppress **with a reason and a review date**. Suppressions without a date turn into noise everyone ignores (same rule as P7-7)
+- [ ] **Prove it:** a deliberately public bucket and an IAM role unused for 90+ days both appear as findings and reach the alert channel
+- [ ] Cost noted in `docs/sizing-and-cost.md`: Security Hub bills per check, Config per recorded item. Turn both off with everything else when you destroy the lab
+
+---
+
+## P10-5c Auto-remediation with Python, boto3 and Lambda
+
+**Type:** Story · *Needs P10-5b's detection, and P5-8's least-privilege skills*
+
+**Why:** P10-5b finds the public bucket, maybe 40 minutes later, and a human
+still has to fix it. Terraform and Argo CD handle **desired state**; they
+can't **react to an event**. "When X happens, check AWS and act" is code:
+Python and boto3. That's why "DevOps doesn't need to code" is out of date:
+you don't own the product's code, but you own the automation code.
+
+This is Lambda as **automation glue**, not as an app platform, so it fits an
+EKS-only template (see P0-13: real systems mix them).
+
+```
+S3 bucket policy / ACL / public-access-block changed
+  → CloudTrail (a trail must be on) → EventBridge rule
+  → Lambda (Python + boto3): verify it's really public → re-apply the public access block
+  → tag the bucket with what changed it and why → post to the alert channel
+  → failures to a DLQ, with an alarm on the DLQ
+```
+
+- [ ] Code in the platform repo with **unit tests** (e.g. `moto` to fake AWS); deployed by Terraform like everything else
+- [ ] **Dry-run mode first:** it logs what it *would* do. Read a week of decisions before letting it act
+- [ ] **Execution role scoped to exactly** the actions it needs (`s3:PutBucketPublicAccessBlock`, `s3:GetBucketPolicyStatus`, `s3:PutBucketTagging`) on the buckets it may touch. Never `s3:*`
+- [ ] **Loop guard:** ignore events whose actor is the remediation role itself, or its own fix triggers it again
+- [ ] An explicit exception (e.g. a tag `public-access=approved` set by Terraform for a real website bucket) so it doesn't fight intended config
+- [ ] **DLQ + alarm.** A remediator that fails silently is worse than none
+- [ ] **Prove it:** make a test bucket public → it's private again within 60 seconds, tagged, and the channel shows who changed it and what was undone. The same event in dry-run produces the same decision without acting
+- [ ] **Rule of thumb:** automate routine, well-understood fixes (public buckets, untagged resources, idle volumes). Keep humans on novel incidents and judgement calls
+
+---
+
 ## P10-6 Dynamic testing (DAST)
 
 **Type:** Story
@@ -235,6 +285,23 @@ Matching the managed-first choice, two layers:
 
 ---
 
+## P10-8c On-call and incident roles
+
+**Type:** Task · *Uses the ownership contract (P0-11b)*
+
+**Why:** an alert that pages "nobody in particular" at 3 a.m., with no
+runbook and no write-up afterwards, recurs two months later.
+
+- [ ] **Routing by layer:** platform alerts (load balancer 5xx, node and pod failures, Argo CD degraded, certificate expiry) page platform; app errors page the dev team; unclear ones page both. Write it into the alert labels
+- [ ] **Every alert that can page a human links to a runbook** (alert annotation `runbook_url`). An alert with no runbook isn't ready to page anyone
+- [ ] **Incident roles:** one **incident commander** coordinates and decides; others investigate. Two people fixing in opposite directions is the most common way an incident gets worse
+- [ ] **Handover checklist:** from devs, what changed and whether it's a known code path; from platform, what the infrastructure shows and what's already ruled out
+- [ ] **Alert-quality review** monthly: every alert that fired and needed no action is a bug (delete it, tune it, or make it a ticket instead of a page). Alert fatigue is the main reason real pages get missed
+- [ ] Post-mortem action items have owners and due dates, and are checked monthly ([DAY-2-OPERATIONS.md](DAY-2-OPERATIONS.md))
+- [ ] A dedicated tool (PagerDuty, Opsgenie, Grafana OnCall) is worth it once more than one person is on call; for a learning project, SNS → email/Slack is enough
+
+---
+
 ## P10-9 Backup and disaster recovery
 
 **Type:** Story
@@ -245,6 +312,12 @@ Matching the managed-first choice, two layers:
 - [ ] **DR drill:** delete the whole `sock-shop` namespace → restore → **all data present** → CUJ passes. RTO measured against the P0-10 target
 - [ ] **Full-rebuild drill:** `terraform destroy` everything except the state bucket and backups → rebuild from Git + restore → CUJ passes
 - [ ] Runbooks for both
+- [ ] **Don't let recovery depend on the thing that's broken.** Once the platform is complete, the tools you recover with run on it. Answer these in the runbook, and test at least one with the cluster actually down:
+  - If the cluster is unreachable, how do you deploy a fix? (Break-glass: an admin Access Entry + `kubectl apply` from a tagged commit, logged; P8-4)
+  - If Secrets Manager or ESO is down, do **running** pods keep working? (They should: the Kubernetes Secret already exists.) What about pods that restart?
+  - Are the runbooks readable with the platform down? Keep a copy in the Git repo, not only in a wiki behind the cluster's SSO
+  - Does the restore procedure need anything you'd be restoring (Argo CD, Velero itself, the state bucket)?
+- [ ] Velero restores namespaced resources well; **cluster-scoped** ones (CRDs, ClusterRoles, StorageClasses) come back from Git via Argo CD. Check the order works
 
 ---
 
@@ -252,9 +325,10 @@ Matching the managed-first choice, two layers:
 
 **Type:** Story
 
-- [ ] **Upgrades:** EKS minor version (control plane → add-ons → nodes), one version at a time, in dev first; PDBs keep it safe; check deprecated APIs first (`kubent` or `pluto`)
+- [ ] **The operating rhythm** from [DAY-2-OPERATIONS.md](DAY-2-OPERATIONS.md) on a calendar: daily, weekly, monthly and quarterly checks, each with an owner
+- [ ] **Upgrades:** the full runbook is [P10-10d](#p10-10d-cluster-upgrade-runbook)
 - [ ] **Registry rescans:** ECR enhanced scanning or a nightly Trivy job over running images; a new CRITICAL in prod → a ticket with an SLA
-- [ ] **Cost:** budget alerts, Cost Explorer by tags, `kube-downscaler` / scheduled scale-to-zero for dev at night, OpenCost per namespace; monthly review of oversized requests, NAT data, cross-AZ traffic, idle nodes
+- [ ] **Cost:** allocation and the monthly audit are [P10-10c](#p10-10c-cost-allocation-and-the-five-minute-audit)
 - [ ] **Certificates and secrets rotation** schedule written down
 
 ---
@@ -276,6 +350,70 @@ and incidents (P10-8).
 
 - [ ] A small script or scheduled workflow computes all four from Git + Argo CD + `docs/rca/`, and writes them to a dashboard or a monthly Markdown report
 - [ ] Recorded at the start (likely "manual, monthly") and at the end of the project: the **before/after** numbers are your strongest resume bullets (P11-3)
+
+---
+
+## P10-10c Cost allocation and the five-minute audit
+
+**Type:** Story
+
+**Why:** finance asks "which team doubled the bill?" and nobody can answer,
+because every namespace shares the same nodes and the bill is one number. A
+debug Deployment left at 50 replicas over a weekend shows up only on the
+invoice.
+
+- [ ] **OpenCost** (CNCF, free) installed by Argo CD, reading cluster usage plus AWS billing data from the **Cost and Usage Report** (Data Exports to S3, queried with Athena), so shared node cost is split per namespace and team
+- [ ] Allocation relies on the `team` / `part-of` labels enforced by Kyverno (P8-6). Without enforced labels, cost per team is guesswork
+- [ ] A per-namespace cost dashboard in Grafana; **AWS Cost Anomaly Detection** alert to the alert channel
+- [ ] **Monthly rightsizing:** requested vs actual CPU and memory per service (Goldilocks/VPA in recommend mode, P6-8). Feed the results back into requests and HPA targets
+- [ ] **Know the buying levers** (write which ones apply in the cost ADR):
+
+| Lever | Saves | Use for |
+|---|---|---|
+| **Spot** (Karpenter, P6-6) | 60–90 %, but 2-minute reclaim notice | Stateless, replicated pods, CI runners, load-test workers |
+| **Compute Savings Plan** (1 year) | ~30–50 % | The **always-on floor** of nodes. Floor on Savings Plan, bursts on Spot; never the floor on Spot |
+| **Graviton (ARM)** | ~20 % for the same work | Almost everything, once images are multi-arch (P2-6) |
+| Dev scale-to-zero at night (`kube-downscaler`, scheduled) | Up to ~60 % of dev | Non-prod |
+
+- [ ] **Cross-AZ traffic is a trade-off, not a mistake.** AWS charges ~$0.01/GB each way between AZs. Zone spread (P6-4) buys availability and costs transfer; **topology-aware routing** (`trafficDistribution: PreferClose` on a Service) claws some back. Decide per service which matters more
+- [ ] **The five-minute audit**, monthly here and on day one of any inherited account:
+  1. S3 and DynamoDB **gateway endpoints** exist? (Free. If not, add them today.)
+  2. How big is the **NAT processing** line, and which services drive it? Do they need interface endpoints (P4-3)?
+  3. How big is the **cross-AZ** line? Any of it avoidable?
+  4. Is the steady node floor covered by a **Savings Plan**?
+  5. Is any burst-tolerant work still **On-Demand**?
+  6. **Orphans:** unattached EBS volumes, old snapshots, idle load balancers, unused Elastic IPs?
+  7. **Log ingestion** volume, and is retention set on every log group?
+- [ ] **Prove it:** you can say what one namespace cost last week, and a deliberately over-provisioned Deployment triggers an anomaly or rightsizing finding within a day
+
+---
+
+## P10-10d Cluster upgrade runbook
+
+**Type:** Story · *Do one real minor-version upgrade before you call P10 done*
+
+**Why:** EKS supports each Kubernetes minor version for a limited time. After
+that the cluster moves to **extended support**, which costs several times the
+normal control-plane price, every hour. A cluster nobody has upgraded before
+turns a routine task into a 2 a.m. fear.
+
+**"Upgrade the cluster" really means upgrading a coupled set of parts in a
+valid order:**
+
+| Part | Check before the upgrade |
+|---|---|
+| Control plane | The target version is supported by every item below |
+| Add-ons (VPC CNI, CoreDNS, kube-proxy, EBS CSI, Pod Identity agent) | Their compatible versions for the target |
+| Controllers (AWS LB Controller, Karpenter, Argo CD, Kyverno, ESO, cert-manager, Velero, Falco) | Each one's support matrix for the target Kubernetes version |
+| Your manifests and charts | Deprecated APIs (`pluto` / `kubent` over the gitops repo) |
+| Node AMIs | Karpenter and the managed node group roll to the new version |
+
+- [ ] A **compatibility matrix** in `docs/upgrades.md`: every component above, its current version, and the versions that support the next Kubernetes minor. Kept up to date (Renovate PRs, P7-7)
+- [ ] **Order:** non-prod first → controllers that need it → control plane (one minor at a time) → add-ons → nodes. A validation gate between each: CUJ passes, Argo CD all `Synced`/`Healthy`, no new errors
+- [ ] **What scanners miss:** `pluto`/`kubent` check your manifests, **not** the API versions that controllers create by themselves. Read each controller's release notes too
+- [ ] PDBs (P6-3) make node rolls safe, as long as no PDB blocks every eviction
+- [ ] **Prove it:** a full minor upgrade of the non-prod cluster under the CUJ load loop with **zero failed requests**, against the written runbook; time recorded; runbook fixed where it was wrong
+- [ ] Upgrade on a calendar (quarterly; [DAY-2-OPERATIONS.md](DAY-2-OPERATIONS.md)), not when the end-of-support email arrives
 
 ---
 
@@ -328,6 +466,9 @@ is everything a demo skips:
 - [ ] Falco alerts on a shell in a pod within seconds; a GuardDuty sample finding reaches the SNS alert path
 - [ ] Namespace deleted and fully restored within the RTO target
 - [ ] Chaos results recorded, including whether the alerts fired
+- [ ] A bucket made public is private again within 60 seconds, with an audit trail (P10-5c)
+- [ ] You can name last week's cost of one namespace (P10-10c)
+- [ ] One minor-version upgrade of non-prod done against the runbook with zero failed requests (P10-10d)
 
 ## Common mistakes
 

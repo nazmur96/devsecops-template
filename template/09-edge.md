@@ -37,6 +37,40 @@ If a feature you need (e.g. readiness gates or WAF on Gateway-managed target
 groups) isn't supported in your version, record that in the ADR and use the
 fallback noted in that step.
 
+### ALB, NLB or API Gateway? (know when the answer changes)
+
+This phase uses **one ALB** for every hostname. One ALB per service costs
+N times the baseline for no gain. The choice is usually decided by **who your
+clients are**, not by preference:
+
+| | **ALB** (template default) | **NLB** | **API Gateway** |
+|---|---|---|---|
+| Layer | 7: host, path, header routing | 4: ports only | 7, fully managed |
+| TLS | Terminates it | Terminates **or passes it through** | Terminates it |
+| Fixed IPs | No (they rotate) | **Yes, one Elastic IP per AZ** | No |
+| Client's real IP | In `X-Forwarded-For` | **Preserved** | In a header |
+| WAF | Native | No (put CloudFront or an ALB in front) | Native |
+| Cost | Per hour + per LCU | Cheaper at high throughput | **Per request: expensive at volume** |
+
+**Switch to an NLB when any of these is true:**
+- A partner (a bank, a payment provider) must **allowlist your IP** in their firewall.
+- **Mutual TLS must end in your app**, with the private key never held by an AWS service.
+- The traffic **isn't HTTP**: raw TCP, gRPC streaming at scale, IoT, games.
+- **Latency** is a hard requirement.
+
+A common real shape is **ALB + WAF for the public web, NLB for partner
+integrations.** With an in-cluster gateway (Envoy, Cilium), the NLB passes
+traffic through and the gateway does the routing.
+
+**To expose one service to another AWS account,** don't peer whole VPCs:
+put an NLB in front of it and publish it with **PrivateLink** (a VPC endpoint
+service). The other account gets a private endpoint in its own subnet, and
+overlapping CIDRs don't matter.
+
+**API Gateway** fits per-consumer API keys, quotas and request validation at
+*low* volume. At high volume, per-request pricing makes it the most expensive
+option.
+
 ---
 
 ## P9-1 Install the Gateway API CRDs and enable the controller's Gateway support

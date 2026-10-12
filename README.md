@@ -11,10 +11,10 @@ production-grade platform on AWS EKS, one provable step at a time.**
 ![Argo CD](https://img.shields.io/badge/CD-Argo_CD-EF7B4D?logo=argo&logoColor=white)
 ![Kyverno](https://img.shields.io/badge/Admission-Kyverno-1F6FEB)
 ![Phases](https://img.shields.io/badge/phases-13-informational)
-![Tickets](https://img.shields.io/badge/tickets-130-informational)
+![Tickets](https://img.shields.io/badge/tickets-142-informational)
 ![Cost P0–P3](https://img.shields.io/badge/cost_P0--P3-%240-success)
 
-[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [The guide](DEVSECOPS-GUIDE.md)
+[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md)
 
 </div>
 
@@ -102,7 +102,8 @@ Everything that runs is watched, alerted on and backed up.
   a drill or negative test that shows it fails safely, and that becomes your
   interview evidence.
 - **EKS only, on purpose.** There are no ECS, Fargate or multi-cloud tracks.
-  Alternatives appear as one-line ADR notes, never as parallel paths.
+  You still learn *when* ECS or Lambda would be the better choice ([P0-13](template/00-inherit-and-plan.md#p0-13-why-eks-the-compute-decision)), and how to
+  [scale the template down](template/README.md#scale-the-template-to-your-situation) for a smaller team.
 - **Built from real projects.** It merges the best part of
   [9 reference projects and courses](reference/README.md) and fixes what each
   of them got wrong.
@@ -158,7 +159,7 @@ listed in [Come back later](template/README.md#come-back-later).
 
 | # | Phase | Goal | Key tools | You're done when… |
 |---|---|---|---|---|
-| 0 | [Inherit & plan](template/00-inherit-and-plan.md) | Know the app, people, risks and budget before touching infra | ADRs, threat model, AWS Budgets | Someone new reads `docs/` in 20 min and can explain the app, the cost and the top 3 risks |
+| 0 | [Inherit & plan](template/00-inherit-and-plan.md) | Know the app, people, risks and budget before touching infra | Discovery session + service manifest, ADRs, threat model, AWS Budgets | Someone new reads `docs/` in 20 min and can explain the app, the cost and the top 3 risks |
 | 1 | [Dev environment](template/01-dev-environment.md) | A reproducible per-project toolchain; run the app locally | mise, devcontainer, DevPod, pre-commit | `git clone && devpod up .` → every tool works, the CUJ runs, no manual step |
 | 2 | [Containerise](template/02-containerise.md) | Hardened, small, reproducible images | multi-stage Dockerfiles, hadolint, Trivy, Compose | Every image passes hadolint, Trivy, the size budget and the non-root check |
 | 3 | [Local Kubernetes](template/03-local-kubernetes.md) | Learn Kubernetes with no cloud bill | KinD, Envoy Gateway, cert-manager, NetworkPolicy | PSA `restricted` enforced; default-deny proven; CUJ passes with policies on |
@@ -168,7 +169,7 @@ listed in [Come back later](template/README.md#come-back-later).
 | 7 | [Security pipeline](template/07-pipeline.md) | Every change scanned, built once, signed; gates fail closed | GitHub Actions, Trivy, Semgrep, Syft, Cosign | Five deliberately bad PRs are all blocked; a vulnerable image never reaches ECR |
 | 8 | [GitOps & enforcement](template/08-gitops-and-enforcement.md) | Git is the only way in; admission rejects the rest | Argo CD, Helm, Kyverno, Argo Rollouts | An unsigned image with a valid tag **cannot run**, even from your own registry |
 | 9 | [Edge](template/09-edge.md) | HTTPS-only, real domain, WAF, zero-downtime rollouts | Gateway API, ALB controller, ACM, ExternalDNS, WAF | `https://` only, zero 502s during rollouts, SQL-injection probe blocked |
-| 10 | [Observe & operate](template/10-observe-and-operate.md) | See, alert on, defend and recover the system | ADOT, AMP, Grafana, Falco, GuardDuty, k6, Velero | SLO dashboard links a slow request to its trace and logs; namespace restored within RTO |
+| 10 | [Observe & operate](template/10-observe-and-operate.md) | See, alert on, defend, recover, and run it day to day | ADOT, AMP, Grafana, Falco, GuardDuty, Security Hub, Lambda auto-remediation, OpenCost, k6, Velero | SLO dashboard links a slow request to its trace and logs; namespace restored within RTO |
 | 11 | [Present it](template/11-present-it.md) | Anyone understands it in 5 minutes | README, evidence folder, ADRs | Someone reads it cold and explains the architecture and three trade-offs |
 | 12 | [Multi-account](template/12-multi-account.md) *(later)* | One AWS account per environment | Organizations, SCPs, cross-account roles | A dev-account admin can't see or change anything in prod |
 
@@ -450,6 +451,27 @@ clouds) appear only as one-line ADR notes.
 </details>
 
 <details>
+<summary><b>Shouldn't some of this be ECS or Lambda instead?</b></summary>
+
+Often, yes, in a real job. Lambda fits event-driven work under 15 minutes;
+ECS + Fargate fits a single team with under ~20 services and no need for the
+Kubernetes ecosystem. This template uses EKS for a **learning** reason, and
+says so. [P0-13](template/00-inherit-and-plan.md#p0-13-why-eks-the-compute-decision)
+teaches the decision framework and has you write the "why EKS" ADR, including
+the case against it. Real systems mix them: P10-5c uses Lambda for
+auto-remediation next to EKS.
+</details>
+
+<details>
+<summary><b>I'm using this at work, not for learning. Do I need all of it?</b></summary>
+
+No. [Scale the template to your situation](template/README.md#scale-the-template-to-your-situation)
+maps each kind of company to which tickets to keep, keep minimal, or defer.
+The rule: adopt tools that remove a manual, error-prone step; defer tools
+that add a new decision-making system until something forces them.
+</details>
+
+<details>
 <summary><b>Why KinD for the local cluster, and not k3s, minikube or vcluster?</b></summary>
 
 KinD runs the same upstream Kubernetes as EKS, starts a multi-node cluster in
@@ -520,7 +542,9 @@ why the budget alert comes first.
 ├── template/              ← the plan itself
 │   ├── README.md          phase map, dependency graph, decisions, explainers
 │   ├── 00-…12-*.md        one file per phase: Goal, Why, tickets, Prove it, mistakes
-│   └── COMMON-MISTAKES.md everything the reference projects got wrong, by phase
+│   ├── COMMON-MISTAKES.md everything the reference projects got wrong, by phase
+│   ├── DAY-2-OPERATIONS.md running it: rhythm, troubleshooting path, 18 incidents, drills
+│   └── WHEN-IT-ALL-RUNS-TOGETHER.md  the system view: where tools overlap, is it worth adding
 ├── PRACTICE-APPS.md       which app to run through the template, in what order
 ├── DEVSECOPS-GUIDE.md     the three-layer model the template is built on
 └── reference/             reviews of the 9 projects the template was merged from

@@ -276,6 +276,8 @@ spec:
   - [ ] an image from Docker Hub
   - [ ] a pod without resource limits
 - [ ] Kyverno failure mode chosen and documented (fail-closed for app namespaces; system namespaces excluded so a Kyverno outage can't block recovery)
+- [ ] **Labels for cost and ownership:** a `require-labels` rule for `app.kubernetes.io/part-of` and a `team` label on every workload (P0-12). Cost allocation (P10-10c) is only as good as these labels
+- [ ] **Mutating policies vs Argo CD:** if a Kyverno rule *adds* something at admission (a default label, a sidecar, a tag rewritten to a digest) that isn't in Git, Argo CD sees live ≠ Git and the app stays **OutOfSync forever**. Fix it by putting the field in Git (preferred; this is why CI writes digests, not tags) or with `ignoreDifferences` on exactly that field in the Application. Never by turning off self-heal
 
 > The same rule now lives in three layers (guide §1): the Dockerfile sets
 > `USER 10001` (L1), hadolint/Checkov fail the PR if it's missing (L2), and
@@ -317,6 +319,7 @@ spec:
 - [ ] **Failure path:** a deliberately broken version **rolls back automatically**, with no human action; rollback time measured
 - [ ] Normal rollback for everything else documented: `git revert` the gitops commit → Argo CD syncs
 - [ ] **Keep the failed canary around** for a few minutes after an abort (`abortScaleDownDelaySeconds`), so the team can `kubectl exec`/`logs` into it before it's gone; logs stay searchable in CloudWatch Logs afterwards
+- [ ] **Who owns the replica count?** Point the HPA (P6-2) at the `Rollout` (`scaleTargetRef.kind: Rollout`), not the old Deployment. During a canary, the HPA sees CPU across stable **and** canary pods but doesn't know the canary only gets 10 % of traffic, so scaling mid-rollout can look strange. Decide how canary pods are sized (by default from the traffic weight; `setCanaryScale` to fix it), write the handoff down (Rollouts drives during a rollout, HPA after promotion), and watch one rollout under load to confirm. Don't add a KEDA `ScaledObject` *and* your own HPA to the same workload: KEDA already creates one
 - [ ] Know the chain for the interview (reference 09): **Prometheus only stores metrics; it never rolls anything back.** Argo Rollouts queries it each analysis interval; on a breach it aborts and sets the route weights back to 100 % stable; the **AWS Load Balancer Controller** (not Argo CD, not Rollouts) calls the AWS API to change the ALB's weighted target groups, so the split happens **per request at the ALB**, not by pod count. Then the notification fires (P8-3a)
 
 ---
@@ -399,6 +402,30 @@ passes through extra proxies.
 - [ ] Keep NetworkPolicy too: L3/L4 policy and mesh identity are two layers (defence in depth)
 - [ ] Measure the cost: p95 latency and memory per pod, before vs after; record them
 - [ ] ADR: sidecar vs sidecarless (Linkerd vs Istio ambient vs Cilium), using your measurements; the conditions under which you'd switch
+
+---
+
+## P8-12 [OPT] Feature flags: deploying is not releasing
+
+> **Use when:** product wants a feature on for some users only (employees, one customer, 5 %), or you need a **kill switch** that turns a feature off in seconds without a redeploy. Skip it while every change can simply go out with its deploy.
+
+**Type:** Story
+
+A canary (P8-8) controls **which version** gets traffic. A feature flag
+controls **which behaviour** a user sees inside the same version. With flags,
+"the deploy went bad" becomes "flip a flag", and code can be merged and
+deployed before it's switched on.
+
+| Backend | Pick when |
+|---|---|
+| **flagd** (CNCF, in-cluster, flags in a ConfigMap from Git) | Learning default: flags are GitOps-managed like everything else |
+| **AWS AppConfig** feature flags | AWS-native; the pod reads flags through the AppConfig agent with its Pod Identity role |
+| LaunchDarkly / Unleash | A team that wants a flags UI for product managers |
+
+- [ ] The app calls the **OpenFeature** SDK (CNCF standard), never a vendor SDK directly, so changing backends is a provider config change, not a rewrite of every `getFlag` call
+- [ ] One flag targets **internal users only**; one is a **kill switch** linked from the relevant alert's runbook (P10-4)
+- [ ] Every flag has an owner and a removal date. Old flags are dead code paths nobody tests
+- [ ] **Prove it:** the kill switch turns a feature off for all users within a minute, with no deploy and no pod restart
 
 ---
 

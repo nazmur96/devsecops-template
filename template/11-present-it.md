@@ -171,6 +171,78 @@ pods were OOM-killed while reporting free heap; the JVM didn't respect the
 cgroup limit. Fixed with `MaxRAMPercentage`; verified with a 512 Mi memory
 test, then later recognised the same fault (F3) in TrainTicket."*
 
+### Scenario bank: practise thinking out loud
+
+Interviewers use scenarios to test **judgement about where a responsibility
+sits**, not trivia. Answer with this structure:
+
+1. **Say which constraint is really binding** ("the binding constraint isn't scale, it's the compliance boundary").
+2. **Say what you'd check first, and why that order.**
+3. **Give the fix, then its ongoing cost.**
+4. **Say what would change your answer.** This is the strongest signal that you're reasoning, not reciting.
+
+Try each one aloud before opening it.
+
+<details><summary><b>1. A pipeline role has AdministratorAccess but gets "AccessDenied … because of a Service Control Policy".</b></summary>
+
+An SCP is an organisation-level **ceiling**, not a permission; account IAM can only grant inside it. The fix is in AWS Organizations (amend the SCP or move the account), not in the role. First ask *why* the SCP denies it: if it's a deliberate guardrail, change the pipeline instead. (P5-8, P12)
+</details>
+
+<details><summary><b>2. Traffic goes from 100 to 50,000 req/s in two minutes; pods scale at 70 % CPU and fall over first.</b></summary>
+
+CPU is a lagging signal: scale on requests per target, or pre-scale on a schedule if the event time is known. Karpenter adds nodes in about a minute. Push static assets to a CDN (P9-7). Check connection pooling: a sudden fleet of new pods opening unpooled connections takes the database down instead (P4-9). (P6-2, P10-7)
+</details>
+
+<details><summary><b>3. Developers want permanent access keys and an SSH bastion to debug a private service.</b></summary>
+
+Decline both by **leading with the alternative**: SSO for short-lived credentials with the same SDK code locally and in the pod; Session Manager or `kubectl debug` for a shell, with no open ports and every session logged. If getting access is genuinely slow, fix that too, or the workaround comes back. (P5-1)
+</details>
+
+<details><summary><b>4. Every release drops connections for about 30 seconds.</b></summary>
+
+Two causes, usually together: the rollout removes old pods before new ones take traffic (readiness gates, maxUnavailable, canary; P9-5, P8-8), and the drain time is wrong (the deregistration delay must exceed the app's drain time, and the **app must handle SIGTERM**). The last part is the developers', so it's a shared fix. (P0-2b, P3-8)
+</details>
+
+<details><summary><b>5. A migration deploys fine and the site breaks instantly.</b></summary>
+
+Running code can't read the new schema. Enforce **expand/contract**: add without removing, deploy code that reads both, drop the old column in a later change, and agree this as a contract in advance. Require an undo path in every schema PR. (P8-3b, P0-11b)
+</details>
+
+<details><summary><b>6. The bill doubled. Find the waste now.</b></summary>
+
+Cost by service and tag first, then the five-minute audit: NAT processing (gateway endpoints are free), cross-AZ transfer, orphaned volumes and snapshots, idle load balancers, log ingestion without retention. Then structure: is the floor on a Savings Plan, and is burst work still On-Demand? (P10-10c)
+</details>
+
+<details><summary><b>7. A fintech: 6 services, 4 engineers, one client requiring SOC 2. How many clusters?</b></summary>
+
+High compliance, low headcount. Keep most things in one well-isolated setup on managed services, but if one service touches regulated data it gets its own cluster and account however small. Name the trigger for every extra cluster. (Template README "Scale the template", P0-6, P12)
+</details>
+
+<details><summary><b>8. A partner bank needs to allowlist your IP and requires mutual TLS terminated by your app. ALB or NLB?</b></summary>
+
+NLB: fixed Elastic IPs, and TLS passthrough so mTLS ends in your app. The ALB's IPs rotate and it terminates TLS itself. (P9, "ALB, NLB or API Gateway?")
+</details>
+
+<details><summary><b>9. Your team runs 12 services on ECS Fargate; someone proposes moving to EKS. Argue both sides.</b></summary>
+
+Use the P0-13 framework. Concede the case for staying first ("ECS works for our shape"); justify a move only with requirements that exist (admission policy for an auditor, several teams needing isolation, progressive delivery); state the ongoing cost (upgrades, more failure modes); name your own bias; give the reversal cost. (P0-13)
+</details>
+
+<details><summary><b>10. A video-transcoding service sits at 100 % CPU by design and gets bursts of thousands of jobs.</b></summary>
+
+CPU is meaningless here: scale on queue depth, to zero when idle, on Spot with interruption handling (KEDA, P6-2). Then ask if Lambda fits better; it depends on whether a job can exceed 15 minutes. Workers must be idempotent. (P0-13)
+</details>
+
+<details><summary><b>11. Two VPCs joined by a Transit Gateway: traffic works one way and times out the other.</b></summary>
+
+Asymmetric routing. Attaching isn't routing: both VPC route tables and the TGW route table need entries in both directions. ([DAY-2-OPERATIONS.md](DAY-2-OPERATIONS.md) incident 16)
+</details>
+
+<details><summary><b>12. The pod's role explicitly allows <code>s3:GetObject</code> and every request returns 403.</b></summary>
+
+An explicit deny always wins: check the bucket policy, the KMS key policy if the bucket is encrypted, and the VPC endpoint policy. All of them must agree. (P5-8)
+</details>
+
 ---
 
 ## P11-6 [OPT] Publish it

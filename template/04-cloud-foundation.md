@@ -84,6 +84,18 @@ platform/
 - [ ] Environments differ **only** in `*.tfvars` (sizes, CIDRs, endpoint mode, Multi-AZ). Reference 06's `env/dev|staging|prod.tfvars` is the model
 - [ ] **Decision:** write your own modules (best for learning; references 05/06) or use `terraform-aws-modules/*` (best for real work). ADR
 
+> **When it grows: split state into stacks.** One state per environment is
+> right for this project. Once several people apply changes, or one bad apply
+> could hit everything, split each environment into **stacks** with their own
+> state key: `network` (VPC, endpoints) → `cluster` (EKS, add-ons, Karpenter)
+> → `data` (RDS, caches, queues). A later stack reads an earlier one's
+> **outputs** with `data "terraform_remote_state"`, and only those outputs
+> are the contract, so you can refactor a stack's insides without breaking its
+> readers. Benefits: a `destroy` in `data` can't touch the cluster, plans get
+> faster, and teams can own a stack each. Keep outputs minimal. Apply in order,
+> **non-prod first, never prod and non-prod from one plan**. Commit
+> `.terraform.lock.hcl`; never commit state.
+
 ---
 
 ## P4-3 Network
@@ -104,6 +116,7 @@ platform/
 > **security group as the source** ("anything wearing the `app-sg` badge")
 > instead of IP addresses. Every SG rule in this phase follows that pattern.
 
+- [ ] **Endpoints are a cost decision too.** NAT charges per GB in both directions, even for traffic to AWS's own services, and every image pull, log line and STS call goes through it. **S3 and DynamoDB gateway endpoints: always** (they're free). **Interface endpoints** (ECR, STS, Logs, Secrets Manager; ~$0.01/h per AZ each) pay for themselves once a service pushes roughly **150–200 GB/month** through NAT. They're also more secure: no public path, and they support endpoint policies. Check the NAT line on the bill monthly (P10-10c)
 - [ ] Subnet tags for load balancers: public `kubernetes.io/role/elb = 1`, private `kubernetes.io/role/internal-elb = 1`
 - [ ] Flow logs on
 - [ ] Outputs: VPC ID, subnet IDs by tier
@@ -299,9 +312,12 @@ then pulls dependencies from **one place you control**.
 | Document | DocumentDB, or keep MongoDB in-cluster | Sock Shop expects MongoDB; in-cluster StatefulSet is acceptable (ADR) |
 | Queue | SQS / Amazon MQ | Sock Shop expects RabbitMQ → Amazon MQ, or in-cluster |
 
-- [ ] `publicly_accessible = false`, storage encrypted, SG ingress **only from the cluster/pod SG** (never a CIDR)
+- [ ] `publicly_accessible = false`, storage encrypted, SG ingress **only from the cluster/pod SG** (never a CIDR); **one SG per data store, never shared**, so compromising one service doesn't give network reach to every database
 - [ ] **When the app can't connect**, debug in gate order (from the database article above): `Connection timed out` = security group/network; `Connection refused` = nothing listening; `no pg_hba.conf entry` = DB access rules; `password authentication failed` = credentials. Test with `kubectl run -it --rm dbg --image=postgres:16 -- psql -h <endpoint> -U app -d mydb` from inside the cluster
 - [ ] Dev vs prod in tfvars: `multi_az`, `deletion_protection`, `backup_retention_period`, `skip_final_snapshot = false` in prod
+- [ ] **Connection limits:** sum `peak connections per pod × maxReplicas` across every service using the database (from the manifests, P0-2b) and compare it with the instance's `max_connections`. If a scale-out could exceed it, add pooling in the app, or **RDS Proxy** in front. "The database fell over" during a traffic spike is very often this
+- [ ] **[OPT] RDS IAM authentication** (*use when:* you want no database password at all): the pod's Pod Identity role gets `rds-db:connect`, and the app requests a 15-minute token instead of a stored password. Fewer secrets to rotate
+- [ ] **Why you might leave RDS later** (write it in the ADR so you'd recognise it): avoiding cloud lock-in, cost at large scale *if* you already run Kubernetes maturely, data sovereignty or air-gapped rules, or running everything on one platform. Without one of those, RDS is the right default. (SQLite + Litestream is a third option, but only for single-writer apps on one node)
 - [ ] **[OPT] Operator paradigm** (*use when:* you want to learn the operator pattern or can't use a managed database): CloudNativePG in-cluster vs RDS, with failover and PITR drills and an ADR comparing RTO/RPO, cost and on-call burden (reference 07, SOCKPLAT-52–55)
 
 ---

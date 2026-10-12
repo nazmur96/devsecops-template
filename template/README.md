@@ -8,7 +8,7 @@ someone new can follow it **without needing other resources**: each step
 says what to do, why, how to check it worked, and what usually goes wrong.
 
 **Scope:** EKS only. No ECS, no Fargate-as-platform, no other clouds.
-Alternatives appear only as one-line ADR notes, never as parallel tracks.
+Alternatives are never parallel tracks; [P0-13](00-inherit-and-plan.md#p0-13-why-eks-the-compute-decision) teaches when they would be the better choice.
 
 It is the merge of:
 
@@ -60,10 +60,12 @@ Swap in your own app; the steps don't change.
 | 7 | [Security pipeline (CI)](07-pipeline.md) | Every change is scanned, built once, signed, and fails closed | L2 | 02, 04 |
 | 8 | [GitOps & enforcement](08-gitops-and-enforcement.md) | Git is the only way in; admission rejects anything that skipped CI | L3 | 06, 07 |
 | 9 | [Edge](09-edge.md) | HTTPS, DNS, WAF, zero-downtime rollouts at the load balancer | L1 | 06, user Section 11 |
-| 10 | [Observe & operate](10-observe-and-operate.md) | Metrics, logs, traces, SLOs, runtime detection, DR, chaos, cost | Runtime | 06, 07 |
+| 10 | [Observe & operate](10-observe-and-operate.md) | Metrics, logs, traces, SLOs, runtime and account security, auto-remediation, DR, chaos, cost, upgrades | Runtime | 06, 07 |
 | 11 | [Present it](11-present-it.md) | README, evidence, ADRs, resume bullets, interview story | — | 04, 05 |
 | 12 | [Multi-account (later)](12-multi-account.md) | One AWS account per environment: Organizations, SCPs, cross-account doors. **After a few projects** | L1 | 09, user notes |
 | — | [Common mistakes](COMMON-MISTAKES.md) | Everything the reference projects got wrong, grouped by phase. **Read each phase's section before starting that phase**, not at the end | — | all |
+| — | [Day-2 operations](DAY-2-OPERATIONS.md) | Running it after it's built: operating rhythm, troubleshooting path, 18 common incidents, drill calendar | Runtime | roadmap appendix |
+| — | [When it all runs together](WHEN-IT-ALL-RUNS-TOGETHER.md) | The system view: where policy, identity, routing and scaling decisions overlap, and how to decide if a tool is worth adding | — | roadmap Part VIII |
 
 ---
 
@@ -109,8 +111,46 @@ logically, but they need something built later. Each is marked ⏸ in its phase.
 | [P8-4c](08-gitops-and-enforcement.md#p8-4c-integration-and-api-tests-in-staging) ZAP step | P8 | P10-6 | ZAP is set up in P10 |
 | [P8-8](08-gitops-and-enforcement.md#p8-8-progressive-delivery-with-argo-rollouts) Argo Rollouts canary | P8 | P9 **and** P10-1 | Splits traffic at the ALB (P9) and decides from AMP metrics (P10-1) |
 | [P6-2](06-run-it-well.md#p6-2-replicas-and-autoscaling) HPA against the SLO | P6 | P10-7 | P6 proves scaling with a simple load loop; P10-7 proves it against the p95 SLO with k6 |
+| [P6-5b](06-run-it-well.md#p6-5b-platform-node-pool-and-priorityclass) platform node pool | P6 | P6-6 | Apps need Karpenter's NodePools before the managed node group can be tainted for platform tools |
 
 When you finish P10, come back to this table and close every row.
+
+---
+
+## Scale the template to your situation
+
+As a learning project, do everything (skipping `[OPT]` freely). In a real
+job, **knowing what to leave out is the skill.** What decides it isn't
+company size but four separate things:
+
+1. **Blast radius:** does a bad deploy lose money, data or trust, or is it an annoying rollback?
+2. **Compliance:** is there a real external gate (SOC 2, PCI, HIPAA auditor), or just good instinct?
+3. **Team vs system size:** can one platform engineer hold the whole system in their head?
+4. **Traffic and cost:** does inefficiency cost real money?
+
+High compliance with a tiny team (a 6-person fintech with one SOC 2 client)
+is the hardest combination; there, managed services matter most.
+
+| | **Tier 1: small** (< ~15 services, small team, no compliance mandate) | **Tier 2: growing** (~15–60 services, 2–5 platform engineers) | **Tier 3: enterprise / regulated** |
+|---|---|---|---|
+| First question | Is EKS even right? ([P0-13](00-inherit-and-plan.md#p0-13-why-eks-the-compute-decision): ECS or Lambda may be) | EKS usually starts paying for itself here | Compliance decides the topology |
+| **Keep (cheap, high payoff)** | P0, P4, P5-1..5, P6-1..4, P7, P8-1..8, P9-1..6, P10-1..5, P10-9, the endpoint rule in P4-3 | All of Tier 1, plus P6-5b, P8-9, P10-5b, P10-8c, P10-10c, P10-10d | All of Tier 2, plus P12 (account per environment) and P8-11 (mTLS) |
+| **Minimal version** | One cluster with namespaces; CloudWatch only; 2–3 SLIs, no full burn-rate framework | Two clusters (P0-6 default); Kyverno in Audit for new rules | The regulated service in **its own cluster and account**, however small |
+| **Defer until it hurts** | P5-6 OpenBao, P8-10 vCluster, P8-11 mesh, P8-12 flags, P10-11 multi-region, P10-13 self-hosted stack, P3-7b Cilium | A second mesh next to Cilium; self-hosted logging | Active-active multi-region (start with warm standby) |
+| **Consolidate instead of adding** | — | Secrets Manager + RDS IAM auth before OpenBao; Cilium's own L7 before adding a mesh; managed logs, spending the effort on log *quality* | Buy down every non-differentiating system (managed Prometheus, logs, Kafka, Vault) and invest in "who wins" docs ([WHEN-IT-ALL-RUNS-TOGETHER.md](WHEN-IT-ALL-RUNS-TOGETHER.md)) |
+| Beyond this template | — | — | Internal developer platform (Backstage), SPIFFE/SPIRE, compliance evidence automation |
+
+**The rule in one line:** adopt tools that **remove a manual, error-prone
+step** (certificates, scoped IAM, consistent deploys); defer tools that **add
+a new decision-making system** (a mesh, dynamic secrets, an event bus) until a
+specific incident or requirement justifies them. "We might need it later"
+isn't a reason; "this hurt us last quarter" is.
+
+**Where there's no cheap middle ground:** real cluster separation has a fixed
+operational floor (two control planes to patch and upgrade); active-active
+multi-region is roughly double the infrastructure plus genuine
+distributed-systems work; audit evidence always needs a human to maintain the
+story. If you need these, budget honestly; don't fake them with namespaces.
 
 ---
 
@@ -121,6 +161,7 @@ Change any of them with an ADR; the template still works.
 | Decision | Choice | Why (and where the reference projects differ) |
 |---|---|---|
 | Cloud | AWS, one region, 3 AZs | All references use AWS/EKS |
+| Compute | **EKS**, for a learning reason stated in an ADR | [P0-13](00-inherit-and-plan.md#p0-13-why-eks-the-compute-decision) teaches when ECS/Fargate or Lambda would be the better architecture |
 | IaC | **Terraform**, remote state in S3 with locking, never committed | 05/06 got state right; 06 committed a state backup with passwords |
 | Cluster | **EKS** (current default version), managed node group + Karpenter later | 02/04 used `eksctl` CLI flags (not reproducible) |
 | Local cluster | **KinD** (3 control plane + 3 workers) | Only 07 has a local bridge; it saves money and teaches more |

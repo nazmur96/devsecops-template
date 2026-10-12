@@ -131,6 +131,24 @@ topologySpreadConstraints:
 - [ ] `ResourceQuota` per team namespace (pods, CPU, memory, PVCs, LoadBalancers = 0)
 - [ ] `LimitRange` with default requests/limits so a manifest without them still gets sane values
 - [ ] **Negative test:** a Deployment that would exceed the quota is rejected with a clear event
+- [ ] Quota sized by **criticality plus headroom**, not by today's usage, and big enough for every HPA's `maxReplicas` (P6-2). Otherwise HPA scales into the quota wall and stalls silently
+
+---
+
+## P6-5b Platform node pool and PriorityClass
+
+**Type:** Story · ⏸ **Do it right after P6-6.** Tainting the managed node group before Karpenter's NodePools exist would leave the app with nowhere to run
+
+**Why:** Argo CD, Karpenter, Kyverno and the observability agents are the
+tools you use to **recover**. If an app's memory leak or a noisy batch job
+starves the node they share, you lose the dashboards and the deploy path at
+the exact moment you need them.
+
+- [ ] The **managed node group** (P4-5) becomes the **platform pool**: taint it `dedicated=platform:NoSchedule`; give Argo CD, Karpenter, Kyverno, External Secrets, cert-manager and the collectors a matching toleration + `nodeSelector`. Apps run on Karpenter's NodePools (P6-6)
+- [ ] A Kyverno rule (P8-6) **rejects that toleration outside the platform namespaces**. A taint is only advisory to anyone who can write a toleration
+- [ ] **PriorityClass:** `platform-critical` for the tools above, `business-critical` for the **1–2 services in the CUJ that matter most** (checkout, payment), default for the rest. Under pressure the scheduler evicts low priority first. Don't mark everything critical: then nothing is
+- [ ] **[OPT] NodeLocal DNSCache** (*use when:* you run dozens of services, or see DNS timeouts under load): a per-node DNS cache in front of CoreDNS
+- [ ] **Prove it:** fill the app nodes with a memory-hog Deployment → app pods get evicted or go `Pending`, but Argo CD and Grafana stay up and usable
 
 ---
 

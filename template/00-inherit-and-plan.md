@@ -18,10 +18,14 @@ docs/
 ├── cuj.md                the Critical User Journey (your universal test)
 ├── sizing-and-cost.md    measured or estimated resources, monthly cost
 ├── environments.md       which environments, how they're separated
+├── ownership.md          who owns what between devs and platform (P0-11b)
+├── conventions.md        names, tags, labels (P0-12)
 ├── threat-model.md       assets, entry points, top risks
 ├── nfr.md                SLO targets, RTO/RPO, compliance needs
 ├── adr/                  0001-*.md, 0002-*.md …
 └── backlog.md            the tickets from this template, adapted
+
+and in each app repo: MANIFEST.md, the service manifest (P0-2b)
 ```
 
 ---
@@ -64,6 +68,101 @@ record it as a constraint.
 
 Constraints: `catalogue-db` credentials baked into the image; MySQL 5.7 EOL;
 some services ignore SIGTERM; no tracing instrumentation.
+
+---
+
+## P0-2b Discovery session and the service manifest
+
+**Type:** Story · **Output:** one `MANIFEST.md` per service, **in the app repo** next to the code
+
+**Why:** the inventory (P0-2) is what *you* can read from the code. The rest
+you have to **ask the developers**, and the biggest beginner mistake is not
+knowing what to ask, then accepting vague answers ("it's stateless", "port
+3000, I think"). Every vague answer turns into a 502, a crash loop or dropped
+requests later. You build the highway; developers build the cars. They owe you
+structured answers; you owe them a safe, automated place to run.
+
+### The question bank: ask what breaks if you don't
+
+| Area | Ask | What it protects you from |
+|---|---|---|
+| Packaging | "Dockerfile, binary, or raw source?" · "Base image, multi-arch?" · "Exact runtime version you tested with?" | The wrong pipeline; no Graviton later; "works on my machine" |
+| Network | "Which port, from the code, not from memory?" · "Public or internal only?" · "HTTP/1.1, HTTP/2, gRPC, TLS, raw TCP?" · "Does any client need a fixed IP or mutual TLS?" | Target-group mismatch (**the #1 cause of 502s**); over-exposure; choosing ALB when you needed NLB (P9) |
+| **State** | "If I kill this container mid-request, what does the user lose?" · "Does it write **anything** to local disk: sessions, uploads, temp files, caches?" | Data lost on every scale-in. **Ask the disk question even after they say "stateless"**: developers sincerely believe it while writing uploads to `/tmp` |
+| Startup / shutdown | "How long from start to serving traffic?" · "Does it trap SIGTERM and finish in-flight work?" · "How long does draining take?" | A 90 s cold start killed by a 30 s health check = an endless crash loop that looks like an app bug. No SIGTERM handling = dropped requests on **every** deploy |
+| Data | "Engine and version?" · "Real customer data, or disposable?" · "**Does it pool connections, and how many at peak?**" · "What does it call, what calls it, and what happens when a dependency is down?" | "The DB fell over" that was really 500 unpooled connections hitting `max_connections`; retry storms; no blast-radius map |
+| Scaling | "Steady or spiky, and what *causes* the spikes?" · "What signals overload: CPU, requests or queue depth?" · "**Can it process the same message twice safely?**" | Scaling on the wrong metric (P6-2); data corrupted by at-least-once redelivery |
+| Secrets | "Which credentials, and does it reload them **without a restart**?" · "Are any in the repo right now?" · "How will you debug it in prod?" | Rotation causing an unplanned outage; an inherited leak; the bastion-and-static-keys request arriving as an emergency (offer SSM, P5-1) |
+
+### Running the 30-minute session
+
+1. **Scope (5 min):** "I want the infrastructure to match exactly what your code needs."
+2. **App (10 min):** packaging, port, protocol, state, startup and shutdown.
+3. **Data (10 min):** datastore, criticality, connections, secrets, dependencies.
+4. **Scale (5 min):** traffic shape, scaling signal, health path, owner.
+
+**Rules that make it work:**
+- Never ask "just tell me what you want". Give an **either/or with the consequence attached**: *"single-AZ to save money, or Multi-AZ because it's real customer data?"*
+- Test statelessness by **behaviour**, not definition.
+- "I don't know" is a valid answer. Set conservative bounds, instrument it, and book a revisit in two weeks. Then ask "what would *cause* a spike?"
+- Under deadline pressure, ask only the **four load-bearing questions** (port and protocol, disk, SIGTERM, which database and is the data real). Write down the deferred risk as a shared decision.
+- Write the answers into the manifest **during** the meeting.
+
+### The service manifest (copy into each app repo)
+
+```markdown
+# SERVICE MANIFEST: <service>
+## 1. Identity       runtime+version · artifact (Dockerfile/binary) · multi-arch?
+## 2. Network        public|internal · port · protocol · static IP / mTLS needed?
+## 3. Compute        CPU/RAM · stateless|stateful · min/max replicas · scaling signal
+## 4. Data           engine+version · single|Multi-AZ · peak connections, pooled? · buckets · queues · idempotent?
+## 5. Observability  health path (one that can FAIL) · logs to stdout? structured? · traced?
+## 6. Config         key | plain|secret | Secrets Manager path · reloads secrets without restart?
+## 7. Start/stop     cold start (s) · traps SIGTERM? · drain time (s)
+## 8. Dependencies   calls · called by · on dependency failure: retry | circuit-break | fail fast
+## 9. Ownership      dev on-call · team channel · runbook link · manifest owner
+```
+
+Sections 7–9 are the ones usually missing, and they're the ones you need at
+3 a.m. **During an incident the manifest is your diff:** "it says HTTP/2 over
+TLS on 8443; the target group says HTTP" is a 5-minute fix instead of an hour
+of guessing. That's why **who keeps it current** matters more than how
+complete it is.
+
+- [ ] A manifest per service, filled in **with** a developer, committed in the app repo
+- [ ] Every "I think" replaced by a value checked in the code
+- [ ] Known gaps (no SIGTERM, health check on `/`, unpooled connections) turned into tickets for the dev team
+- [ ] A manifest owner named per service
+
+<details>
+<summary><b>Exercise: spot the gaps in this manifest</b></summary>
+
+`inventory-sync` · Production · Python 3.11 · internal · port 8000 · HTTP/1.1 ·
+0.5 vCPU / 1 GB · "stateless" · min 1 / max 10 on CPU > 70 % · PostgreSQL 15
+single instance · health check `/` · logs to stdout · `DB_PASSWORD` in Secrets Manager.
+
+**Check yourself:**
+1. Sections 7–9 are missing entirely: no cold start, SIGTERM, drain, dependencies or on-call. That is the most serious gap.
+2. `min 1` in prod: every deploy is a brief outage and there's no AZ redundancy.
+3. A health check on `/` returns 200 while the database is dead. A check that can't fail does nothing.
+4. A single-instance database contradicts "Production". That's a business decision disguised as a field.
+5. Nothing about connection pooling, and up to 10 replicas.
+6. CPU may be the wrong signal for a "sync" job. It is probably queue- or schedule-driven.
+7. Does it reload `DB_PASSWORD` on rotation? And is it idempotent?
+</details>
+
+<details>
+<summary><b>Exercise: manifest vs live config (aim for under a minute each)</b></summary>
+
+| Manifest says | Live config | Symptom |
+|---|---|---|
+| HTTP/2 over TLS, 8443 | Target group: HTTP, 8443 | **502**: unencrypted bytes hit a TLS socket; pods look healthy |
+| Cold start 75 s | Health check fails after 30 s | **Endless crash loop** that looks like an app bug |
+| Drain 30 s | Deregistration delay 5 s | **Dropped requests on every deploy** |
+| Read-write one bucket | Role allows `s3:*` | No symptom: an audit finding and a wider blast radius |
+| Internal only | SG allows `0.0.0.0/0` | Reachable from far more than intended; use SG-as-source (P4-3) |
+| Scale on queue depth | HPA on CPU, min 1 | Scales late or never; never reaches zero (KEDA, P6-2) |
+</details>
 
 ---
 
@@ -256,6 +355,30 @@ Any real data in dev, or a second team member.
 
 ---
 
+## P0-11b The ownership contract
+
+**Type:** Task · **Output:** `docs/ownership.md`
+
+**Why:** some failures have no technical cause. A developer assumes "tests
+passed, so it's live"; you assume a human approves prod; a fix sits unshipped
+for two days. Or a bad release runs at 100 % for 40 minutes because each side
+thought the other would roll back. No Terraform fixes an unstated assumption.
+
+| Developers own | Platform owns | **Agree explicitly, in writing** |
+|---|---|---|
+| Dockerfile / build definition | Pipeline automation | **Image tags:** git SHA (+ semver releases), **never `latest`** (P0-12) |
+| Tests and what "passing" means | The deployment gate | **What blocks a deploy:** e.g. CRITICAL/HIGH findings block, MEDIUM warns; who may grant an override and for how long |
+| Branch protection on their repo | Rollback mechanics | **Who approves prod:** auto on green to staging; prod needs a code-owner review (P7-5) |
+| App-level error handling | Infrastructure alerting | **Who triggers rollback:** automatic on canary failure (P8-8); either side may `git revert` without asking |
+| Versioning | Environment config | **Who owns each service manifest** (P0-2b) as the app changes |
+
+- [ ] The five agreements written down, linked from each app repo's README
+- [ ] **During incidents:** pages are routed **by layer, not seniority**: load balancer 5xx, node and pod failures page platform; app errors page the dev team; unclear ones page both. **One incident commander**; two people fixing in opposite directions is how incidents get worse (P10-8c)
+- [ ] Console or `kubectl` changes made during an incident are reconciled back into Git within 24 hours
+- [ ] Developers are told **before** a secret rotation if their service needs a restart to pick it up
+
+---
+
 ## P0-12 Naming, tagging and labelling conventions
 
 **Type:** Task · *Decide once, write it in `docs/conventions.md`, never debate it again*
@@ -285,6 +408,52 @@ what's what. Pick a pattern now, before the first resource exists.
 - [ ] `docs/conventions.md` committed with this table, adapted
 - [ ] Linked from every repo's `CONTRIBUTING.md`
 - [ ] Each "enforced by" item turned on when its phase arrives
+
+---
+
+## P0-13 Why EKS? The compute decision
+
+**Type:** Decision (ADR: "why EKS") · *Do this once you have the inventory (P0-2) and manifests (P0-2b)*
+
+This template is EKS-only, on purpose. But "why Kubernetes?" is one of the
+most common interview questions, and what it really asks is **"do you know
+when *not* to use it?"** In many real AWS shops the right answer is ECS or
+Lambda. Know the framework even though you'll build on EKS.
+
+| | **Lambda** | **ECS + Fargate** | **EKS** |
+|---|---|---|---|
+| You manage | Code | Task definitions | Cluster add-ons, node lifecycle, upgrades every few months |
+| Fits | Event-driven work, glue between AWS services, spiky APIs, scheduled jobs | Long-running services, one team, roughly 5–20 services, no multi-tenancy need | You need the ecosystem (GitOps, admission policy, operators, mesh), several teams on shared infrastructure, or portability |
+| Hard limits | 15 min per run, 10 GB memory, cold starts, no persistent connections | No Helm, Argo CD, Kyverno, CRDs or operators; isolation means separate accounts | ~$73/month control plane per cluster plus a real Day-2 workload ([DAY-2-OPERATIONS.md](DAY-2-OPERATIONS.md)) |
+| Cost shape | Free when idle; **expensive at sustained high throughput** | Per task-second; no control-plane fee | Cheapest per pod at good node utilisation |
+
+**Walk down the list and stop at the first honest "yes":**
+
+1. Event-driven, stateless, under 15 minutes? → **Lambda.** Don't containerise it out of habit.
+2. Under ~20 services, one team, no multi-tenancy, no need for the Kubernetes ecosystem? → **ECS + Fargate.**
+3. Need GitOps, admission policy, operators or a mesh, several isolated teams, or portability? → **EKS.**
+4. Choosing Kubernetes because it's on job descriptions? That's a valid **learning** reason (it's this template's reason). It isn't an **architecture** reason. Never mix the two up in an interview.
+
+**Real systems mix them:** EKS for the core services, Lambda for event glue
+and scheduled jobs (like the auto-remediation in P10-5c), and Fargate for a
+few isolated workloads. "Which platform" is a per-workload question.
+
+**What usually decides the shape** (from six common company types):
+
+| Situation | Typical answer |
+|---|---|
+| Seed startup: 3 services, 2 engineers | ECS/Fargate or Lambda; CloudWatch; no GitOps, mesh or policy engine yet |
+| Growing SaaS: ~15 services, 3 teams | EKS, prod + non-prod clusters, everything managed: **this template's shape** |
+| Payments (PCI) | EKS; the card-data service gets **its own cluster and account** however small; NLB for partner banks (P9) |
+| Healthcare (HIPAA) | EKS or ECS (the controls matter more than the orchestrator); encryption everywhere; no PHI in logs |
+| Enterprise: 50+ services | Clusters per domain, hub-spoke GitOps, policy as default, golden paths |
+| Global consumer app | One cluster per region (forced by data residency), warm standby before active-active |
+
+The pattern: **compliance decides topology, client requirements decide the
+edge, and what you leave out is the real decision.**
+
+- [ ] The "why EKS" ADR written: the options, the choice, **the case against your own choice**, the ongoing cost (upgrades, patching, on-call), and the **reversal cost** (images are portable; manifests → task definitions is weeks, not a rewrite)
+- [ ] The ADR names what would change your mind
 
 ---
 

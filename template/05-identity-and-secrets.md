@@ -36,6 +36,15 @@ Three kinds of identity, three mechanisms:
 
 - [ ] **Negative test:** the Developer role can't create a Deployment in another team's namespace (`kubectl auth can-i create deploy -n team-y` → `no`)
 - [ ] **Namespace = team = RBAC boundary** (reference 03)
+- [ ] **No bastion, no SSH keys.** Offer this *before* someone asks for "a bastion and an access key": **SSM Session Manager** gives a shell on a node or private instance through the AWS CLI (`aws ssm start-session`), with no inbound ports, nothing to patch, and every session logged. For pods, use `kubectl exec` / `kubectl debug` through the Access Entry. Locally, developers use their own SSO session, so the same SDK code runs locally and in the pod with no credentials in config
+
+> **The conversation you'll have:** *"Can you just make me an IAM user and
+> send me the access key?"* Don't lead with "that's insecure". Lead with the
+> alternative and why it's **less** work for them: the SDK finds credentials by
+> itself (SSO locally, Pod Identity in the cluster), so they **delete**
+> credential-handling code instead of adding it. Then answer the real
+> objections before they come: "how do I test locally?" (`aws sso login`) and
+> "how do I debug in prod?" (Session Manager, `kubectl debug`).
 
 ---
 
@@ -293,6 +302,35 @@ per-service policies, no cloud lock-in.
 For homelab/Talos setups without a cloud secrets manager: secrets live
 **encrypted** in Git with SOPS + age, decrypted by Argo CD (KSOPS) at sync.
 Fine for small teams; you lose central rotation and audit.
+
+---
+
+## P5-8 Debug an AccessDenied, and trim permissions
+
+**Type:** Task · *The AWS skill you'll use for the rest of your career*
+
+**Why:** least-privilege policies (P5-2, P5-4) mean you **will** hit
+`AccessDenied`. The skill isn't writing policies, it's **naming which layer
+denied the request** before changing anything. Guessing and widening the
+policy is how `"Resource": "*"` creeps back in.
+
+**The layers that can say no** (an explicit deny anywhere always wins):
+
+| Layer | Lives in | Typical surprise |
+|---|---|---|
+| SCP | AWS Organizations (P12) | An `AdministratorAccess` role still denied. SCPs are a ceiling, not a grant |
+| Permission boundary | On the role | The identity policy allows it, the boundary doesn't |
+| Identity policy | The role or user | The action or resource ARN is slightly wrong |
+| **Resource policy** | S3 bucket, KMS key, ECR repo, Secrets Manager secret | **S3 returns 403 while the role allows `s3:GetObject`**: the bucket policy denies it, or the **KMS key policy** doesn't let the role decrypt |
+| VPC endpoint policy | The interface/gateway endpoint (P4-3) | Works from your laptop, fails from the pod that goes through the endpoint |
+| Session policy / duration | The assumed session | A long CI job dies with an expired token after exactly 1 h: raise the role's max session duration or refresh mid-job |
+| Trust policy | The target role | `AssumeRole` fails: the trust (*who may assume me*) and the caller's permission (*what I may try*) are **two different policies**; you probably fixed one |
+
+- [ ] **Drill:** break one permission on purpose. Find the event in **CloudTrail** (`errorCode = AccessDenied`), read the principal and action, name the layer, then fix only that
+- [ ] **Test as the real principal.** "Works for me" with your SSO admin proves nothing about the pod's role. Exec into the pod and run the call there
+- [ ] **IAM Access Analyzer:** turn it on for the account; fix one finding (anything shared outside the account, or over-broad)
+- [ ] **Unused permissions:** after a week of real traffic, check each workload role's **last accessed** data (IAM Access Advisor) and remove actions never used; re-run the CUJ
+- [ ] Write the top 3 denials you hit and their layer into `docs/rca/` (P10-8)
 
 ---
 
