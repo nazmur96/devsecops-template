@@ -40,6 +40,8 @@ gh repo fork stefanprodan/podinfo --clone=false   # creates github.com/<you>/pod
 gh repo clone <you>/podinfo                       # clone YOUR fork; gh adds `upstream` automatically
 cd podinfo
 gh repo set-default <you>/podinfo                 # so `gh pr create` targets your fork, not the original
+gh repo set-default --view                        # must print <you>/podinfo; gh sometimes picks the original
+git remote set-url --push upstream no-pushing    # upstream becomes fetch-only: a stray push fails safely
 git remote -v                                     # origin = you, upstream = the original
 ```
 
@@ -87,7 +89,7 @@ What's different in a real job, in more detail:
 
 - [ ] Code cloned the right way for your situation; `git remote -v` shows exactly the remotes in the table above
 - [ ] For a fork: the safety checklist above done before the first push
-- [ ] **Project folder** set up with the three repos side by side (`<project>/<app>`, `<project>/<app>-gitops`, `<project>/platform`; P1-1). If you use **Cursor**, copy this template's [`cursor/devsecops-template.mdc`](../cursor/devsecops-template.mdc) into `<project>/.cursor/rules/` so its agent follows the template too (Claude Code already gets it from `~/.claude/CLAUDE.md`)
+- [ ] **Project folder** set up with the three repos side by side (`<project>/<app>`, `<project>/<app>-gitops`, `<project>/platform`; P1-1). If you use **Cursor**, copy this template's [`cursor/devsecops-template.mdc`](../cursor/devsecops-template.mdc) into `<project>/.cursor/rules/` so its agent follows the template too, and copy [`cursor/project.code-workspace.example`](../cursor/project.code-workspace.example) to `<project>/<project>.code-workspace` and open **that** file in Cursor: it opens the project and this template side by side, so the agent can read and `@`-mention the template. Keep **one** copy of the template (here) and link to it; never copy it into projects (Claude Code already finds it via `~/.claude/CLAUDE.md`)
 
 ---
 
