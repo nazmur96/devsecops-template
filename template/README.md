@@ -1,5 +1,7 @@
 # DevSecOps Project Template: from inheriting a repo to production
 
+> 🗺️ **New here?** The [visual overview](../README.md) explains the whole plan with diagrams in about 5 minutes. This page is the detailed hub.
+
 A step-by-step path for taking an application you have just inherited to a
 secure, observable, production-grade platform on **AWS EKS**. Written so that
 someone new can follow it **without needing other resources**: each step
