@@ -63,7 +63,21 @@ git switch -c feat/PAY-123-add-healthcheck       # branch naming from your team'
 git push -u origin HEAD && gh pr create          # PR into the same repo
 ```
 
-What's different in a real job:
+**Side by side:**
+
+| | Your fork (practice) | Company private repo (real job) |
+|---|---|---|
+| Fork? | Yes: you can't push to the original | **No**: you have write access to branches |
+| Clone | `gh repo clone <you>/podinfo` | `gh repo clone <org>/payments-api` |
+| `gh repo set-default` | Needed (two remotes) | Not needed (only `origin`) |
+| `git remote -v` | `origin` = you, `upstream` = original | `origin` only |
+| PRs go to | Your fork | The same company repo |
+| Login | Your personal GitHub | The company org, usually with **SSO**: token and SSH key must be authorised for it |
+| Platform | GitHub.com | Maybe GitHub Enterprise, GitLab, Bitbucket or Azure DevOps |
+| Secrets and runners | You manage them | The org manages them; you usually can't see them |
+| Pushing to `main` | Allowed (it's yours), but don't | **Never**: protected branch, required reviews and checks, maybe signed commits |
+
+What's different in a real job, in more detail:
 - **Access goes through the company.** You're added to the GitHub org (often via an IT/access request), usually with **SAML SSO**. Your `gh` token and SSH key must be **authorised for the org's SSO**, or clones of private repos fail with a 403/404 that looks like "the repo doesn't exist". Fix: `gh auth refresh`, then authorise SSO, or GitHub → Settings → SSH keys → *Configure SSO* → Authorize
 - **The platform may not be GitHub.com:** GitHub Enterprise Server (`--hostname`), GitLab (`glab repo clone`), Bitbucket or Azure DevOps (`az repos`). The Git commands are the same; only the CLI and auth step change
 - **You never push to `main`.** Branch protection, required reviews, `CODEOWNERS` and required checks are already in place; sometimes **signed commits** are required too (`git config commit.gpgsign true` with an SSH or GPG key)
@@ -73,6 +87,7 @@ What's different in a real job:
 
 - [ ] Code cloned the right way for your situation; `git remote -v` shows exactly the remotes in the table above
 - [ ] For a fork: the safety checklist above done before the first push
+- [ ] **Project folder** set up with the three repos side by side (`<project>/<app>`, `<project>/<app>-gitops`, `<project>/platform`; P1-1). If you use **Cursor**, copy this template's [`cursor/devsecops-template.mdc`](../cursor/devsecops-template.mdc) into `<project>/.cursor/rules/` so its agent follows the template too (Claude Code already gets it from `~/.claude/CLAUDE.md`)
 
 ---
 

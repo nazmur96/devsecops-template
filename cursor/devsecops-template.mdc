@@ -1,0 +1,39 @@
+---
+description: Follow Nazmur's DevSecOps EKS template for this project
+alwaysApply: true
+---
+
+# This project follows the DevSecOps template
+
+The plan for this project is my DevSecOps template. **Read it from the
+source, not from memory:**
+
+- Local: `~/orca/projects/devsecops/`
+- Public: https://github.com/nazmur96/devsecops-template
+- Start at `README.md` (overview), then `template/README.md` (phase map,
+  decisions, "Come back later" table, "Scale the template"), then the phase
+  file you're working on (`template/00-…12-*.md`), and `PRACTICE-APPS.md`
+  for which app comes next
+- Reference files: `template/COMMON-MISTAKES.md`,
+  `template/DAY-2-OPERATIONS.md`, `template/WHEN-IT-ALL-RUNS-TOGETHER.md`
+
+## How to work
+
+1. Phases in order, 0 → 11 (12 is later). Before each phase, read its file and
+   its section in `COMMON-MISTAKES.md`. A phase is done only when its
+   **Prove it** drill has actually run.
+2. ⏸ tickets wait for a later phase (template README, "Come back later").
+3. Getting the code: open-source apps are **forked, then the fork is cloned**,
+   and made safe before the first push (Actions off, read-only token):
+   template P1-0. Company repos are cloned directly.
+4. Three repos per project: the app repo, `<app>-gitops`, and `platform`
+   (Terraform). They sit side by side in this project folder. Tools come from
+   each repo's `mise.toml`; **nothing project-specific is installed on the
+   host** (NixOS workstation).
+5. **AWS:** SSO profile only, never access keys. Budget alert (P0-7) before
+   anything is created. **Ask before any action that creates billed AWS
+   resources, and before every `terraform apply`/`destroy`.** Destroy at the
+   end of every session.
+6. **The template is under test.** When a step is wrong or missing, say so,
+   fix it in `~/orca/projects/devsecops` (commit + push to `main`), and add
+   an RCA note in this project's `docs/rca/`.
