@@ -8,7 +8,7 @@ alwaysApply: true
 The plan for this project is my DevSecOps template. **Read it from the
 source, not from memory:**
 
-- Local: `~/orca/projects/devsecops/`
+- In this project folder: `./devsecops-template/` (a symlink to the one real copy at `~/orca/projects/devsecops/`; edits there are edits to the real repo)
 - Public: https://github.com/nazmur96/devsecops-template
 - Start at `README.md` (overview), then `template/README.md` (phase map,
   decisions, "Come back later" table, "Scale the template"), then the phase

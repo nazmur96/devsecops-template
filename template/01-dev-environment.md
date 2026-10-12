@@ -89,7 +89,7 @@ What's different in a real job, in more detail:
 
 - [ ] Code cloned the right way for your situation; `git remote -v` shows exactly the remotes in the table above
 - [ ] For a fork: the safety checklist above done before the first push
-- [ ] **Project folder** set up with the three repos side by side (`<project>/<app>`, `<project>/<app>-gitops`, `<project>/platform`; P1-1). If you use **Cursor**, copy this template's [`cursor/devsecops-template.mdc`](../cursor/devsecops-template.mdc) into `<project>/.cursor/rules/` so its agent follows the template too, and copy [`cursor/project.code-workspace.example`](../cursor/project.code-workspace.example) to `<project>/<project>.code-workspace` and open **that** file in Cursor: it opens the project and this template side by side, so the agent can read and `@`-mention the template. Keep **one** copy of the template (here) and link to it; never copy it into projects (Claude Code already finds it via `~/.claude/CLAUDE.md`)
+- [ ] **Project folder** set up with the three repos side by side (`<project>/<app>`, `<project>/<app>-gitops`, `<project>/platform`; P1-1). Then **link this template into the project folder** so both Claude and Cursor see it next to your code: `ln -s ~/orca/projects/devsecops <project>/devsecops-template`. A symlink, never a copy or a second clone: there is one template, and a fix made through the link lands in the real repo. Put the link in the *project folder*, never inside a repo (it would get committed). If you use **Cursor**, also copy this template's [`cursor/devsecops-template.mdc`](../cursor/devsecops-template.mdc) into `<project>/.cursor/rules/`, and open the **project folder** in Cursor (Claude Code already finds the template via `~/.claude/CLAUDE.md`)
 
 ---
 

@@ -546,7 +546,7 @@ why the budget alert comes first.
 │   ├── DAY-2-OPERATIONS.md running it: rhythm, troubleshooting path, 18 incidents, drills
 │   └── WHEN-IT-ALL-RUNS-TOGETHER.md  the system view: where tools overlap, is it worth adding
 ├── PRACTICE-APPS.md       which app to run through the template, in what order
-├── cursor/                Cursor rule + workspace file to copy into each project folder (P1-0)
+├── cursor/                Cursor rule to copy into each project folder (P1-0)
 ├── DEVSECOPS-GUIDE.md     the three-layer model the template is built on
 └── reference/             reviews of the 9 projects the template was merged from
 ```

@@ -1,7 +1,0 @@
-{
-  "folders": [
-    { "name": "<project> project", "path": "." },
-    { "name": "devsecops-template (reference)", "path": "/home/nazmurrakib/orca/projects/devsecops" }
-  ],
-  "settings": {}
-}
