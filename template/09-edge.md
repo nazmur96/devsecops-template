@@ -165,12 +165,81 @@ spec:
 | Option | How | Pick when |
 |---|---|---|
 | **ACM** certificate on the ALB | DNS-validated in Route 53, referenced in `LoadBalancerConfiguration` | **Default** (references 04, 06) |
-| cert-manager + Let's Encrypt (DNS-01) | Certificate as a Kubernetes Secret on a Gateway listener | When TLS terminates in-cluster (e.g. Envoy Gateway locally, P3-6) |
+| cert-manager + Let's Encrypt (DNS-01) | Certificate as a Kubernetes Secret on a Gateway listener | When TLS terminates in-cluster (e.g. Envoy Gateway locally, P3-6). How: [P9-4b](#p9-4b-opt-lets-encrypt-certificates-with-cert-manager) |
 
 - [ ] Hosted zone in Route 53; registrar nameservers updated (the classic failure: an ACM cert stuck in *pending validation* because the NS records were never changed, from the user's Section 11 notes)
 - [ ] ACM certificate (and its DNS validation record) **in Terraform**
 - [ ] **ExternalDNS** (EKS add-on, Pod Identity) with the Gateway API sources enabled (`gateway-httproute`), so `hostnames` in an `HTTPRoute` become Route 53 records; `--policy=upsert-only` and a TXT ownership registry so it never deletes records it doesn't own
 - [ ] `curl -I http://…` → 301 to HTTPS; `https://` serves a publicly trusted chain; TLS 1.2+ only (`nmap --script ssl-enum-ciphers -p 443 …` or SSL Labs)
+
+---
+
+## P9-4b [OPT] Let's Encrypt certificates with cert-manager
+
+> **Use when:** TLS ends **inside** the cluster instead of at the ALB:
+> Envoy Gateway or another in-cluster gateway behind an **NLB**, an internal
+> tool (Argo CD UI, Grafana) on a private gateway, your **Talos homelab**, or
+> any cluster with no ACM. **Skip it** for the public app on the ALB: the ALB
+> can only serve ACM certificates, so ACM (P9-4) stays the default there.
+
+**What it does, in plain English:** cert-manager is a controller that gets
+certificates for you and **renews them before they expire**. You declare *"I
+want a certificate for `argocd.example.com`"*; cert-manager proves to Let's
+Encrypt that you control that domain, receives a free, publicly trusted
+certificate (valid 90 days), stores it as a Kubernetes `Secret`, and renews it
+about 30 days before expiry. Your gateway reads the Secret. You never touch a
+certificate file. You already used cert-manager in P3-6 with a self-signed CA;
+this is the same tool pointed at a public CA.
+
+**How Let's Encrypt checks you own the domain (the "challenge"):**
+
+| Challenge | How it proves ownership | Works for | Doesn't work for |
+|---|---|---|---|
+| **HTTP-01** | Let's Encrypt fetches `http://<domain>/.well-known/acme-challenge/<token>` from the internet | Public hosts with port 80 open | Wildcards (`*.example.com`), private/internal hosts, anything behind a VPN |
+| **DNS-01** (recommended) | cert-manager writes a TXT record `_acme-challenge.<domain>` in Route 53; Let's Encrypt looks it up | Everything, including **wildcards** and **internal-only** hosts | Needs API access to your DNS provider |
+
+**Steps:**
+
+- [ ] cert-manager installed (already done in P4-6) with Gateway API support on (`config.enableGatewayAPI: true` in the Helm values)
+- [ ] **IAM for DNS-01 (Pod Identity, P5-4):** a role for cert-manager's ServiceAccount allowing `route53:GetChange` on `arn:aws:route53:::change/*`, `route53:ChangeResourceRecordSets` + `route53:ListResourceRecordSets` on **your one hosted zone only** (optionally limited to `_acme-challenge.*` TXT records with the `route53:ChangeResourceRecordSetsNormalizedRecordNames` condition), and `route53:ListHostedZonesByName`
+- [ ] **Two issuers, staging first.** Let's Encrypt production has strict rate limits (e.g. 5 duplicate certificates per week); a broken config can lock you out for days. The staging issuer has generous limits but its certificates aren't trusted by browsers, which is fine for testing:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata: { name: letsencrypt-staging }
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: platform-team@example.com          # expiry warnings go here
+    privateKeySecretRef: { name: letsencrypt-staging-account }
+    solvers:
+      - dns01:
+          route53:
+            region: eu-central-1
+            hostedZoneID: Z0123456789ABC       # pin the zone; don't let it guess
+        selector: { dnsZones: ["example.com"] }
+# letsencrypt-prod: identical, with server: https://acme-v02.api.letsencrypt.org/directory
+```
+
+- [ ] **Get a certificate**, either way:
+  - **Automatic (Gateway API):** annotate the `Gateway` with `cert-manager.io/cluster-issuer: letsencrypt-staging`; each HTTPS listener's `hostname` + `certificateRefs` name becomes a certificate (same pattern as P3-6)
+  - **Explicit:** a `Certificate` object (`dnsNames: ["*.internal.example.com"]`, `secretName: internal-wildcard-tls`, `issuerRef: letsencrypt-staging`) and reference that Secret from the listener
+- [ ] Check it: `kubectl get certificate` → `READY True`; `kubectl describe certificate` shows the events; `cmctl status certificate <name>` explains failures
+- [ ] Switch the issuer to `letsencrypt-prod` → the browser shows a trusted padlock
+- [ ] **Drill:** `cmctl renew <name>` → a new certificate is issued and the gateway serves it with **no restart**
+- [ ] **Alert** on certificates close to expiry (cert-manager exposes `certmanager_certificate_expiration_timestamp_seconds`; alert if < 14 days), because a silently failing renewal is how certificates expire in production
+
+**Debugging (follow the chain of objects):** `Certificate` → `CertificateRequest`
+→ `Order` → `Challenge`. Run `kubectl describe` on each in that order; the
+first one with an error tells you where it broke. Usual causes: the IAM
+policy names the wrong hosted zone; the registrar's nameservers aren't
+pointing at Route 53 (same trap as ACM in P9-4); you hit the production rate
+limit because you skipped the staging issuer.
+
+**Pairs with ExternalDNS:** ExternalDNS creates the `A`/`CNAME` record for the
+hostname, and cert-manager gets the certificate for it. Together, adding a
+hostname to a `Gateway` or `HTTPRoute` gives you DNS **and** HTTPS with no manual step.
 
 ---
 

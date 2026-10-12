@@ -17,6 +17,32 @@ requests + probes (P3) → replicas/HPA → PDB → topology spread → drain dr
                       Metrics Server (P4) → HPA → Karpenter
 ```
 
+**Before you start:** P4 (cluster, ECR, add-ons) and P5 (Pod Identity,
+External Secrets) are done. P7 and P8 are **not** needed yet: this phase
+deploys by hand (P6-0) so you can learn how the workload behaves on EKS
+before you automate how it gets there.
+
+---
+
+## P6-0 First deploy to EKS (temporary, by hand)
+
+**Type:** Task · *Replaced by GitOps in P8; until then this is the only way the app reaches EKS*
+
+Nothing has deployed the app to EKS yet: CI arrives in P7, Argo CD in P8.
+To run the drills in this phase you need the app running now, so deploy it
+by hand **once**, knowing it's temporary.
+
+- [ ] Build each image locally (P2) and push it to ECR (P4-7) with your **SSO role** (P5-1): `aws ecr get-login-password | docker login …`, then `docker push`. Write down each **digest** it prints
+- [ ] Copy `k8s/` from P3 into `k8s/overlays/eks-dev/` (a Kustomize overlay) that changes only what differs on EKS: image → `<account>.dkr.ecr.<region>.amazonaws.com/sockshop/<svc>@sha256:<digest>`, StorageClass → `gp3`, Kubernetes Secrets → the `ExternalSecret`s from P5-5
+- [ ] `kubectl apply -k k8s/overlays/eks-dev` → every pod `Running` and `Ready`
+- [ ] Reach the app **without a load balancer** (the ALB comes in P9): `kubectl -n sock-shop port-forward svc/front-end 8080:80`, then run the CUJ script (P2-8) and the CUJ load loop (P3-8) against `http://localhost:8080`
+- [ ] The overlay sets `app.kubernetes.io/managed-by: kubectl` (Kustomize `labels:`), so anyone looking at the cluster can see these resources weren't deployed by Argo CD. P8-2 removes them with `kubectl delete -k` on this same overlay
+- [ ] **Never repeat this for staging or prod.** It exists for this one learning environment, and only until P8
+
+> **Why not wait for P8?** You'd be learning probes, HPA, PDBs, Karpenter,
+> Argo CD, Helm and Kyverno all at once. Doing P6 by hand first means that when
+> something breaks in P8, you know the workload itself was already fine.
+
 ---
 
 ## P6-1 Re-verify the P3 workload baseline on EKS
@@ -51,7 +77,7 @@ spec:
 - [ ] Metrics Server running (P4-6); `kubectl top pods` works
 - [ ] HPA on every stateless service; `minReplicas: 3` for anything user-facing
 - [ ] Remove `replicas:` from Deployments that have an HPA (otherwise every GitOps sync fights the HPA)
-- [ ] **Prove it:** load test (P10) → pods scale up **before** p95 latency breaks the SLO; scale down after
+- [ ] **Prove it:** run the CUJ load loop (P3-8) with more parallel clients (or `hey -z 5m -c 50 http://localhost:8080/`) → pods scale up; stop it → they scale down after the stabilisation window. The full version (p95 against the SLO, with k6) comes back in P10-7
 - [ ] **[OPT]** Second HPA on a custom metric (requests/second via the Prometheus Adapter)
 - [ ] **[OPT] Event-driven autoscaling with KEDA.** *Use when:* a service consumes a **queue or stream** (RabbitMQ, Kafka, SQS), so CPU says nothing about how much work is waiting. KEDA scales workers on **queue depth / consumer lag**, and can scale them to **zero** when the queue is empty. Sock Shop: scale `queue-master` on the length of the RabbitMQ shipping queue (KEDA uses Pod Identity for SQS, or a secret from ESO for RabbitMQ). Skip it for request/response services, where HPA on CPU or RPS is the right tool
 
@@ -127,7 +153,7 @@ topologySpreadConstraints:
 
 **Type:** Task · *User's Section 12 list*
 
-- [ ] **Node failure:** the default `tolerationSeconds: 300` on `not-ready`/`unreachable` taints means pods on a dead node keep their place for **5 minutes**, while ALB health checks stop sending traffic in seconds. That's why multiple replicas + zone spread matter. Optionally lower it for stateless services
+- [ ] **Node failure:** the default `tolerationSeconds: 300` on `not-ready`/`unreachable` taints means pods on a dead node keep their place for **5 minutes**, while a load balancer's health checks stop sending traffic in seconds (you'll see this with the ALB in P9). That's why multiple replicas + zone spread matter. Optionally lower it for stateless services
 - [ ] **AZ failure drill:** cordon + drain all nodes in one AZ → CUJ still passes; record how long it takes for capacity to recover
 - [ ] **Data stores:** EBS volumes are zonal. A StatefulSet pod can only restart in its volume's AZ. Write down what that means for in-cluster databases (and why managed/multi-AZ data stores exist)
 
@@ -149,7 +175,7 @@ Run all of these **under the CUJ load loop** (P3-8) and record zero failures:
 - [ ] Rolling update of every service
 - [ ] Drain of one node; cordon + drain of a whole AZ
 - [ ] A Karpenter consolidation and a simulated Spot interruption
-- [ ] HPA scale-up during the load test (P10) before the latency SLO is breached
+- [ ] HPA scale-up under the load loop (re-checked against the latency SLO with k6 in P10-7)
 
 ## Common mistakes
 

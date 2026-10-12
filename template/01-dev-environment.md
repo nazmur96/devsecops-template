@@ -270,11 +270,11 @@ cloud), never on your workstation.*
 
 ---
 
-## Later in this phase family: the inner loop (start in P3, once a cluster exists)
+## Not now: the inner loop (comes in P3-9)
 
-You can't adopt these before there are workloads to iterate on (workstation
-notes: *"Phase 12 cannot be done early"*). They're listed here so you know
-where they fit.
+These tools need running workloads to iterate on, so they can't be set up
+yet. They're listed here only so you know what's coming;
+**skip this section and do it in [P3-9](03-local-kubernetes.md#p3-9-set-up-the-inner-loop).**
 
 | Tool | What it does | Pick |
 |---|---|---|

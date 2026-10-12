@@ -1,7 +1,7 @@
 # Common mistakes: everything the reference projects got wrong
 
 One list, grouped by phase. Each line says which reference project did it, so
-you can see it in context (`../reference/NN-*.md`). Read it before each phase.
+you can see it in context (`../reference/NN-*.md`). **Read the section for a phase before you start that phase.**
 
 ## Planning (P0)
 
@@ -45,6 +45,7 @@ you can see it in context (`../reference/NN-*.md`). Read it before each phase.
 | Node-group min/max with no autoscaler | 04 | Karpenter / Cluster Autoscaler |
 | NetworkPolicy never proven enforced | — | Deny test first (P3-7) |
 | ClusterRoleBinding described as namespace-wide | 02 | It's cluster-wide; use RoleBinding |
+| Keeping the P6-0 hand deploy after Argo CD takes over (two owners for the same objects) | — | `kubectl delete -k` the overlay before the first sync (P8-2) |
 
 ## Cloud foundation (P4)
 
@@ -114,3 +115,19 @@ you can see it in context (`../reference/NN-*.md`). Read it before each phase.
 | Alert webhook URLs in Helm values in Git | 08 | Secrets Manager → ESO |
 | Disabling Argo CD self-heal to make a manual patch stick | 08 | Fix it in Git; break-glass procedure (P8-4) |
 | `zap-baseline` described as active attacks | original notes | Baseline is passive |
+
+## Present it (P11)
+
+| Mistake | Ref | Fix |
+|---|---|---|
+| Claims without evidence ("implemented supply-chain security") | — | A screenshot or log of the control firing, in `docs/evidence/` (P11-2) |
+| Resume bullets with no number | — | Before/after numbers: image size, deploy time, DORA (P11-3, P10-10b) |
+| Hiding the corners you cut | — | A trade-offs table with the production alternative (P11-4) |
+| Relative links in published write-ups (they become dead links) | — | Absolute GitHub links (P11-6) |
+
+## Multi-account (P12)
+
+Not the first project's problem. When you get there, see the
+[P12 common mistakes](12-multi-account.md#common-mistakes): workloads in the
+management account, SCPs tested on prod first, one-sided cross-account trust,
+KMS key policies forgotten for shared ECR.

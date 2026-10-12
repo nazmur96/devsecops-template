@@ -319,7 +319,7 @@ then pulls dependencies from **one place you control**.
 
 ## Prove it
 
-- [ ] `terraform destroy && terraform apply` rebuilds the whole environment with **no manual step**, then the CUJ passes (once P8 deploys the app)
+- [ ] `terraform destroy && terraform apply` rebuilds the whole environment with **no manual step**, then the CUJ passes (re-check this once the app is deployed: by hand in P6-0, by Argo CD from P8)
 - [ ] No IAM user access keys exist for humans or CI (`aws iam list-access-keys` empty for your users)
 - [ ] `checkov` clean; `terraform plan` clean after apply
 

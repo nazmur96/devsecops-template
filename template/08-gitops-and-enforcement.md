@@ -38,6 +38,7 @@ admission control**; all of them listed Kyverno as "future work".
   - [ ] UI/API **not** exposed publicly (port-forward, or an internal ALB / VPN)
   - [ ] repo credentials stored as a Kubernetes Secret (via External Secrets), never in a manifest
 - [ ] Argo CD then **manages itself** (app-of-apps includes Argo CD's own chart)
+- [ ] **Retire the hand deploy from P6-0 before the first app sync:** `kubectl delete -k k8s/overlays/eks-dev` removes exactly what P6-0 created (in-cluster database data goes with the PVCs; fine in dev). Then let Argo CD sync the app and run the CUJ. Delete the `eks-dev` overlay from the repo. From here on, nothing reaches the cluster except through Git
 
 ---
 
@@ -186,6 +187,9 @@ spec:
 
 "Pods are Ready" doesn't mean "checkout works". Run the CUJ after every sync.
 
+> **Until P9 gives you a URL,** run the Job against the in-cluster Service
+> (`http://front-end.sock-shop.svc`). Switch it to the public hostname after P9-4.
+
 - [ ] The CUJ script (P2-8) packaged as a small image (curl/k6), run as an Argo CD **PostSync** hook Job against the environment's own URL
 - [ ] On failure: the Argo CD app shows `Degraded`, the notification fires (P8-3a), and for Argo Rollouts the canary aborts (P8-8)
 - [ ] Runs in dev and staging on every sync; in prod, a read-only variant (no test orders) or one using a test account
@@ -210,7 +214,7 @@ against real dependencies (databases, queues), which unit tests in CI can't do.
 - [ ] Test suite lives in the app repo (`tests/api/`), runs as an image like the smoke test, triggered after every staging sync (Argo CD PostSync hook or a workflow listening for the sync notification)
 - [ ] Uses a **test account and test data**, cleaned up afterwards; never depends on data someone created by hand
 - [ ] Results reported as a **commit status on the gitops repo**, and made a **required check on the prod promotion PR** (P7-5): no green staging tests, no promotion
-- [ ] The **ZAP scan** (P10-6) runs in the same stage
+- [ ] ⏸ **After P10-6:** the ZAP scan joins this stage. Leave a placeholder step now
 - [ ] Failures notify the team (P8-3a) with a link to the report
 - [ ] **Prove it:** a change that returns 500 on one endpoint passes CI (unit tests) but is caught here, and the promotion PR can't merge
 
@@ -292,7 +296,7 @@ spec:
 
 ## P8-8 Progressive delivery with Argo Rollouts
 
-**Type:** Story · *Blocked by P10-1 (needs application metrics in Prometheus)*
+**Type:** Story · ⏸ **Come back after P9 and P10-1.** It needs the ALB and `HTTPRoute`s (P9) to split traffic, and application metrics in Prometheus (P10-1) to decide. Read it now; build it then
 
 - [ ] Argo Rollouts installed; `front-end` converted from a Deployment to a `Rollout`
 - [ ] Canary steps: 10 % (5 min) → 50 % (5 min) → 100 %, traffic split with the Argo Rollouts **Gateway API plugin** (it adjusts the `HTTPRoute` backend `weight`s, so the ALB shifts traffic between stable and canary Services)

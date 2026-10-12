@@ -217,9 +217,10 @@ newer build landed after QA sign-off, an **untested image** went to production.
   - `CODEOWNERS` lists **only** `/envs/prod/` (owned by the platform leads)
   - result: the bot's dev/staging PRs **auto-merge** when checks pass (`gh pr merge --auto`); any PR touching `envs/prod/` waits for a lead
 - [ ] So every change is: one feature PR in the app repo → a bot PR to staging (auto-merged) → a promotion PR to prod (approved)
-- [ ] **Staging runs integration/API tests and the ZAP scan** (P10-6) before anyone opens the prod promotion PR
+- [ ] **Staging runs integration/API tests (P8-4c) and the ZAP scan (P10-6)** before anyone opens the prod promotion PR. Neither exists yet: build the promotion flow now and add them as required checks when you reach them
 - [ ] Say "promotion" for moving between environments **through Git**, and "promote" for the Argo Rollouts command that advances a canary step. Interviewers notice when these get mixed up
-- [ ] **Prove it:** the digest running in prod equals the digest that passed staging's ZAP scan and CUJ (`kubectl get pod -o jsonpath='{..image}'`)
+- [ ] **Prove it now:** `promote.sh` opens a PR that changes **only** the digest lines, and the digest CI wrote to `envs/dev` is byte-for-byte the one in the promotion PR
+- [ ] ⏸ **Prove it after P8 and P10-6:** the digest running in prod equals the digest that passed staging's tests, ZAP scan and CUJ (`kubectl get pod -o jsonpath='{..image}'`)
 
 ---
 

@@ -19,18 +19,21 @@ It is the merge of:
 
 ## How to use this template
 
-1. **Do the phases in order.** Each one assumes the previous one is done.
+1. **Do the phases in order, 0 → 11.** Each one assumes the previous one is done.
    The [dependency graph](#dependency-graph) shows which phases can run in parallel.
-2. **Every phase has the same shape:**
+   Phase 12 is for later, after a few projects.
+2. **Read that phase's section of [Common mistakes](COMMON-MISTAKES.md) before you start it.** Five minutes there saves an afternoon of debugging.
+3. **⏸ means "come back later".** A few tickets need something from a later phase. They're marked ⏸ and listed under [Come back later](#come-back-later). Read them when you meet them, build them when that list says.
+4. **Every phase has the same shape:**
    - **Goal**: one sentence
    - **Why**: what breaks if you skip it
    - **Steps**: tickets, each with acceptance criteria you can tick off
    - **Prove it**: the drill or negative test that shows it really works
    - **Common mistakes**: seen in the reference projects
    - **Cost and time**: so nothing surprises you
-3. **Copy tickets into your tracker** (Jira, GitHub Projects, a Markdown file). Ticket IDs are `P<phase>-<n>` so you can rename them to your project key.
-4. **Write an ADR** whenever a ticket says *Decision*. Template in [Phase 0](00-inherit-and-plan.md#p0-8-start-the-adr-log).
-5. **Never skip "Prove it".** A control you haven't seen fail is a control you don't know works.
+5. **Copy tickets into your tracker** (Jira, GitHub Projects, a Markdown file). Ticket IDs are `P<phase>-<n>` so you can rename them to your project key.
+6. **Write an ADR** whenever a ticket says *Decision*. Template in [Phase 0](00-inherit-and-plan.md#p0-8-start-the-adr-log).
+7. **Never skip "Prove it".** A control you haven't seen fail is a control you don't know works.
 
 ### The worked example
 
@@ -58,7 +61,7 @@ Swap in your own app; the steps don't change.
 | 10 | [Observe & operate](10-observe-and-operate.md) | Metrics, logs, traces, SLOs, runtime detection, DR, chaos, cost | Runtime | 06, 07 |
 | 11 | [Present it](11-present-it.md) | README, evidence, ADRs, resume bullets, interview story | — | 04, 05 |
 | 12 | [Multi-account (later)](12-multi-account.md) | One AWS account per environment: Organizations, SCPs, cross-account doors. **After a few projects** | L1 | 09, user notes |
-| — | [Common mistakes](COMMON-MISTAKES.md) | Everything the reference projects got wrong, in one list | — | all |
+| — | [Common mistakes](COMMON-MISTAKES.md) | Everything the reference projects got wrong, grouped by phase. **Read each phase's section before starting that phase**, not at the end | — | all |
 
 ---
 
@@ -67,21 +70,13 @@ Swap in your own app; the steps don't change.
 ```
 P0 Plan
  └─→ P1 Dev environment
-      └─→ P2 Containerise ─────────────┐
-           ├─→ P3 Local Kubernetes     │
-           │    └─────────────┐        │
-           │                  ▼        ▼
-           │   P4 Cloud foundation ←── (can start after P1, in parallel with P2/P3)
-           │                  │
-           │                  ▼
-           │   P5 Identity & secrets
-           │                  │
-           ▼                  ▼
-      P7 Pipeline ──→ P6 Run it well (on EKS; designed in P3)
-           │                  │
-           └────────┬─────────┘
-                    ▼
-           P8 GitOps & enforcement
+      └─→ P2 Containerise
+           └─→ P3 Local Kubernetes          (all local, $0)
+                └─→ P4 Cloud foundation     (Terraform can be written during P2/P3)
+                     └─→ P5 Identity & secrets
+                          └─→ P6 Run it well   (first deploy by hand, P6-0)
+                               └─→ P7 Pipeline (lint/scan jobs can start during P2)
+                                    └─→ P8 GitOps & enforcement (replaces the P6-0 hand deploy)
                     │
           ┌─────────┴─────────┐
           ▼                   ▼
@@ -94,9 +89,26 @@ P0 Plan
               P12 Multi-account
 ```
 
-- **P4 does not depend on P3.** Terraform for the VPC/IAM/registry can be written while you learn Kubernetes locally.
-- **P7 can start as soon as P2 exists.** Lint, scans and image builds don't need a cluster.
-- **P6 is designed in P3** (probes, resources, shutdown are proven locally) and **re-verified on EKS**.
+The numbers are the safe order. If you want to overlap phases:
+
+- **P4 does not depend on P3.** Terraform for the VPC/IAM/registry can be written while you learn Kubernetes locally (don't `apply` until you need it; the meter starts then).
+- **P7's PR checks can start as soon as P2 exists.** Lint, scans and image builds don't need a cluster. The release workflow needs ECR (P4-7) and GitHub OIDC (P5-2).
+- **P6 is designed in P3** (probes, resources, shutdown are proven locally) and **re-verified on EKS**. The app gets onto EKS by hand in [P6-0](06-run-it-well.md#p6-0-first-deploy-to-eks-temporary-by-hand); P8 replaces that with GitOps.
+
+### Come back later
+
+These tickets sit in an earlier phase because that's where they belong
+logically, but they need something built later. Each is marked ⏸ in its phase.
+
+| Ticket | Read it in | Build it after | Why it has to wait |
+|---|---|---|---|
+| [P7-5](07-pipeline.md#p7-5-promotion-by-digest-never-by-tag) final "Prove it" | P7 | P8, P10-6 | Needs staging running and the ZAP scan |
+| [P8-4b](08-gitops-and-enforcement.md#p8-4b-post-deploy-smoke-test) against the public URL | P8 | P9-4 | Until then, run it against the in-cluster Service |
+| [P8-4c](08-gitops-and-enforcement.md#p8-4c-integration-and-api-tests-in-staging) ZAP step | P8 | P10-6 | ZAP is set up in P10 |
+| [P8-8](08-gitops-and-enforcement.md#p8-8-progressive-delivery-with-argo-rollouts) Argo Rollouts canary | P8 | P9 **and** P10-1 | Splits traffic at the ALB (P9) and decides from AMP metrics (P10-1) |
+| [P6-2](06-run-it-well.md#p6-2-replicas-and-autoscaling) HPA against the SLO | P6 | P10-7 | P6 proves scaling with a simple load loop; P10-7 proves it against the p95 SLO with k6 |
+
+When you finish P10, come back to this table and close every row.
 
 ---
 
@@ -150,6 +162,7 @@ Plain-language articles the user wrote; each one is linked from the phase that n
 | P7 | 1 week | $0 (GitHub Actions free tier) + ECR storage pennies |
 | P8–P10 | 3–4 weeks | ~$5–10 per session with the observability stack |
 | P11 | 3–5 days | $0 |
+| P12 (later) | 1–2 weeks | Organizations and SCPs are free; the cost is **one cluster per environment account** instead of one shared cluster, so roughly the P4–P6 session cost per account you run at the same time |
 
 Reference 06's author reports **$30–50 for the whole course** with
 destroy-after-each-section discipline. Set an **AWS Budget alert** in
@@ -162,7 +175,8 @@ destroy-after-each-section discipline. Set an **AWS Budget alert** in
 | Layer | Question | Phases |
 |---|---|---|
 | **0 Plan** | What are we building, for whom, at what risk and cost? | P0 |
-| **1 Baseline** | Is it built securely and reliably? | P1–P6, P9 |
+| **1 Baseline** | Is it built securely and reliably? | P1–P6, P9; P12 (later) |
 | **2 Pipeline** | Did this change introduce a problem? | P7 |
 | **3 Enforcement** | Can anything get around layers 1 and 2? | P8 |
 | **Runtime** | What is happening right now, and can we recover? | P10 |
+| — | Can someone else understand it and trust it? | P11 |
