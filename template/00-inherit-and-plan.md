@@ -34,7 +34,7 @@ and in each app repo: MANIFEST.md, the service manifest (P0-2b)
 
 **Type:** Task
 
-- [ ] Access to every repo, the issue tracker, the existing cloud account(s), any monitoring, and the docs wiki
+- [ ] Access to every repo, the issue tracker, the existing cloud account(s), any monitoring, and the docs wiki. **Get the code the right way first:** clone (company repo) or fork-then-clone (open source); the steps and the fork safety checklist are in [P1-0](01-dev-environment.md#p1-0-get-the-code-clone-fork-or-both)
 - [ ] Read each service's README, `package.json` / `pom.xml` / `go.mod`, Dockerfiles (if any), CI files, and env-var references (`grep -rn "getenv\|process.env\|System.getenv"`)
 - [ ] List the questions you couldn't answer from the code; book 30 minutes with the dev lead to go through them
 - [ ] **If the dev team didn't document how to run it locally, ask.** Reference 01: *"you have every right to question the developer"*

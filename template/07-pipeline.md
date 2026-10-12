@@ -50,6 +50,7 @@ PROMOTION (no rebuild)
 - [ ] **Caching**, so builds stay fast: dependency caches (`actions/setup-node` / `setup-java` / `setup-go` with `cache:`), Docker **BuildKit layer cache** (`--cache-from`/`--cache-to type=gha`, or a registry cache in ECR), and Trivy's vulnerability DB cached between runs. Target: an incremental build under 5 minutes
 - [ ] All dependencies resolved through the **artifact repository** (P4-8: CodeArtifact or Nexus); base images through the ECR pull-through cache. CI gets the CodeArtifact token from its OIDC role at run time; nothing stored
 - [ ] Workflows on `pull_request` never push images, never write to repos, and never get cloud credentials (forks can't be trusted)
+- [ ] **Working on a fork (P1-0)?** Delete or replace the original project's `.github/workflows/*.yml` with yours **first**, then turn Actions back on (`gh api -X PUT repos/<you>/<repo>/actions/permissions -F enabled=true`). In the other order, the original author's release job runs in your repo
 
 ---
 

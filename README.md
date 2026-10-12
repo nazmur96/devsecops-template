@@ -11,7 +11,7 @@ production-grade platform on AWS EKS, one provable step at a time.**
 ![Argo CD](https://img.shields.io/badge/CD-Argo_CD-EF7B4D?logo=argo&logoColor=white)
 ![Kyverno](https://img.shields.io/badge/Admission-Kyverno-1F6FEB)
 ![Phases](https://img.shields.io/badge/phases-13-informational)
-![Tickets](https://img.shields.io/badge/tickets-142-informational)
+![Tickets](https://img.shields.io/badge/tickets-143-informational)
 ![Cost P0–P3](https://img.shields.io/badge/cost_P0--P3-%240-success)
 
 [**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md)
@@ -411,7 +411,7 @@ says where the reference projects differ.
 
 ## How to use it
 
-1. **Pick your app.** Sock Shop is the worked example; any multi-service app with a database works.
+1. **Pick your app** ([practice-app ladder](PRACTICE-APPS.md)) and **get the code the right way**: fork-then-clone for an open-source app, plain clone for a company repo ([P1-0](template/01-dev-environment.md#p1-0-get-the-code-clone-fork-or-both)).
 2. **Start at [Phase 0](template/00-inherit-and-plan.md)** and go in order. The
    [dependency graph](template/README.md#dependency-graph) shows the safe overlaps.
 3. **Copy each phase's tickets into your tracker** as you reach it. IDs like `P4-3` map straight onto a Jira key.

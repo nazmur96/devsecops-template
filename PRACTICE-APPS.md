@@ -45,6 +45,8 @@ flowchart LR
 
 ## 1. Podinfo: platform smoke test
 
+> **Every app on this ladder is open source:** fork it, clone your fork, and make the fork safe (Actions off, read-only token) before the first push. See [P1-0](template/01-dev-environment.md#p1-0-get-the-code-clone-fork-or-both).
+
 **Why first:** one tiny Go service built *for testing Kubernetes platforms*.
 It has health and readiness endpoints, Prometheus metrics, a version you can
 bump, and it's designed for canary releases. If something breaks here, the

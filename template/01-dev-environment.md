@@ -19,6 +19,63 @@ tools into `C:\DevOps-tools` by hand; this phase makes that a single file.
 
 ---
 
+## P1-0 Get the code: clone, fork, or both?
+
+**Type:** Task · *Do this before anything else in the phase*
+
+**The rule:** fork only when you **can't push to the original** (open source,
+practice apps). If you're a member of the organisation that owns the repo
+(a normal job), **clone it directly** and work on branches.
+
+| Situation | What you do | Remotes you end up with |
+|---|---|---|
+| **Your company's repo** (you have write access) | Clone it. Branch, push, open a PR in the **same** repo | `origin` = the company repo, nothing else |
+| **Open source / a practice app** (Podinfo, Retail Store) | **Fork it**, then clone **your fork** | `origin` = your fork, `upstream` = the original |
+| **Company with a fork-based workflow** (some banks and large orgs restrict who can push branches) | Fork inside the org (stays private), clone your fork, PRs go to the company repo | `origin` = your fork, `upstream` = the company repo |
+
+### Practice app: fork, then clone
+
+```bash
+gh repo fork stefanprodan/podinfo --clone=false   # creates github.com/<you>/podinfo
+gh repo clone <you>/podinfo                       # clone YOUR fork; gh adds `upstream` automatically
+cd podinfo
+gh repo set-default <you>/podinfo                 # so `gh pr create` targets your fork, not the original
+git remote -v                                     # origin = you, upstream = the original
+```
+
+**Make the fork safe before your first push** (these are traps, not theory):
+- [ ] **Secrets:** a fork never inherits the original's secrets or variables. Check that `gh secret list -R <you>/<repo>` is empty; nothing to delete
+- [ ] **Workflows:** the original's `.github/workflows/` **are** copied, and they run the original author's pipeline in your repo. Podinfo's `release.yml`, for example, would sign and publish images to your `ghcr.io`. **Turn Actions off for the fork** until you replace those files with your own in P7: `gh api -X PUT repos/<you>/<repo>/actions/permissions -F enabled=false`
+- [ ] **Token permissions:** set the default workflow token to read-only now (P7-1): `gh api -X PUT repos/<you>/<repo>/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false`
+- [ ] **Visibility:** a fork of a public repo is public, and can't be made private. Never commit anything you wouldn't publish (Gitleaks, P1-4)
+- [ ] **Default branch:** note its name (`master` for Podinfo). Your workflows, branch protection and docs must use the same name
+- [ ] **Staying current:** `gh repo sync <you>/<repo>` (or `git fetch upstream && git merge upstream/master`) when you want the original's updates. Never open PRs to the original by accident: that's what `set-default` prevents
+
+### Company repo: clone, branch, PR
+
+```bash
+gh auth login                                    # GitHub Enterprise Server: gh auth login --hostname github.<company>.com
+gh repo clone <org>/payments-api                 # or: git clone git@github.com:<org>/payments-api.git
+cd payments-api
+git remote -v                                    # only origin; no set-default needed (one remote, no fork)
+git switch -c feat/PAY-123-add-healthcheck       # branch naming from your team's conventions (P0-12)
+# ... commit ...
+git push -u origin HEAD && gh pr create          # PR into the same repo
+```
+
+What's different in a real job:
+- **Access goes through the company.** You're added to the GitHub org (often via an IT/access request), usually with **SAML SSO**. Your `gh` token and SSH key must be **authorised for the org's SSO**, or clones of private repos fail with a 403/404 that looks like "the repo doesn't exist". Fix: `gh auth refresh`, then authorise SSO, or GitHub → Settings → SSH keys → *Configure SSO* → Authorize
+- **The platform may not be GitHub.com:** GitHub Enterprise Server (`--hostname`), GitLab (`glab repo clone`), Bitbucket or Azure DevOps (`az repos`). The Git commands are the same; only the CLI and auth step change
+- **You never push to `main`.** Branch protection, required reviews, `CODEOWNERS` and required checks are already in place; sometimes **signed commits** are required too (`git config commit.gpgsign true` with an SSH or GPG key)
+- **Secrets, runners and allowed Actions are managed by the org.** You use them; you usually can't see or change them
+- **Forking may be disabled** for private repos. When it's allowed, a fork of a private repo stays private and disappears if your access is removed
+- **First day:** read `README.md`, `CONTRIBUTING.md` and `CODEOWNERS`, and run it locally **before** changing anything (P0-1, P1-5)
+
+- [ ] Code cloned the right way for your situation; `git remote -v` shows exactly the remotes in the table above
+- [ ] For a fork: the safety checklist above done before the first push
+
+---
+
 ## P1-1 Decide the repository layout
 
 **Type:** Decision (ADR)
