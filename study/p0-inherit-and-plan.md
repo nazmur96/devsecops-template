@@ -889,6 +889,30 @@ HPA `maxReplicas` and Karpenter limits (P6), WAF rate limits (P9), and the
 budget alert as a backstop (it lags by hours, so it's no use as a brake).
 </details>
 
+<details>
+<summary><b>81. [S] ★</b> You want the CUJ to prove <code>/panic</code> is disabled. Why not just call it and expect 404, and what do you do instead?</summary>
+
+If the gate ever regresses, your own check runs `os.Exit(255)`: the CUJ
+becomes the outage, in prod. Probe with the **wrong method** instead
+(`POST /panic` for a GET-only route). gorilla/mux answers **405** when a path
+is registered but the method doesn't match, and **404** when the path isn't
+registered (`mux.go:204-209`, v1.8.1). So 405 = "route still there" (fail),
+404 = "gated" (pass), and the handler never runs. Check that no other route
+accepts that method on the same path, and confirm the router's behaviour in
+the source: other routers may answer 404 for both cases.
+</details>
+
+<details>
+<summary><b>82. [S] ★</b> You deleted an IAM user's access key. What else must you do so nothing breaks confusingly?</summary>
+
+Find where copies live: list Actions secrets **by name** across your repos
+(`gh secret list`), plus CI variables, `.env` files and laptops. Remove or
+replace them (with OIDC). Otherwise a workflow fails weeks later with
+`InvalidClientTokenId` and nobody connects it to the deletion. Here the only
+copy left was in `devops-ai-playbook`. Then re-check `list-access-keys` for
+every user. Verify the deletion by observing, not by trusting exit code 0.
+</details>
+
 ---
 
 ## Meta — how we work
