@@ -419,6 +419,8 @@ Any real data in dev, or a second team member.
 - [ ] **RTO / RPO** targets (e.g. RTO < 1 h, RPO < 24 h for cluster state, < 5 min for the order database)
 - [ ] Compliance / data rules (PII in `user-db`? retention? region?)
 - [ ] Supported browsers / clients, expected traffic (normal and peak)
+- [ ] **Safety caps**, separate from performance targets, taken from the threat model's DoS and denial-of-wallet rows: HPA min/max (min ≥ 3 if the PDB is `minAvailable: 2`, see P6), canary headroom, ResourceQuota ≥ HPA max × requests, node/Karpenter limits that still leave **room for one surge node** (a cap equal to the floor blocks node replacement), and the budget. These turn into real values in P6
+- [ ] State each SLO's **error budget in time for its window**. 99.5% over a 4-hour session is only ~72 s, which one slow restart can spend. Judge the SLO on staging/prod windows, not on single sessions
 
 ---
 
