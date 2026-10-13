@@ -385,7 +385,8 @@ Prod uses private subnets + NAT (ADR-0011).
 Any real data in dev, or a second team member.
 ```
 
-- [ ] First ADRs written: application choice, environment strategy, network design, secrets approach, CI/CD split
+- [ ] First ADRs written: application choice, environment strategy, network design, secrets approach, CI/CD split. **"Secrets approach" means workload secrets** (how app secrets reach pods). Human access to AWS is a separate ADR, and may already be decided in P0-7 (an existing IdP federated to an IAM role, or Identity Center)
+- [ ] When a decision changes, **supersede** the ADR (new ADR + old one's status set to "Superseded by …"); don't rewrite the old one. Keep a one-line index in `docs/adr/README.md`
 
 ---
 

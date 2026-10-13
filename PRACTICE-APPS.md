@@ -55,6 +55,15 @@ problem is your platform, not the app.
 **When:** right after the EKS cluster exists in run 2, before the Retail Store
 is deployed there. Not a separate project; one or two sessions.
 
+**Alternative track: a full P0 → P11 run on Podinfo first.** It's the cheapest
+way to learn every phase once on an app small enough to read line by line,
+before taking on Retail Store's polyglot, stateful shape. Write it down as an
+ADR (application choice, P0-8). Also list the lessons it *can't* teach (slow
+start / `startupProbe`, a real datastore, connection pooling, multi-service
+NetworkPolicy) so Retail Store covers them. Build your own image in P2 instead
+of mirroring upstream's. Owning the build also lets you patch what the
+platform needs (e.g. turning off `/env` and `/configs`, see P5-5).
+
 - [ ] Deploy it through Argo CD (P8-3) from the gitops repo: the first app the platform ever syncs
 - [ ] Expose it with a `Gateway` + `HTTPRoute` on the ALB, with ACM TLS and an ExternalDNS record (P9)
 - [ ] Kyverno admits it only when signed and pinned by digest (P8-6). Mirror its image into your ECR and sign it with Cosign

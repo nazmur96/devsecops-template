@@ -235,7 +235,8 @@ resource "aws_eks_pod_identity_association" "orders_export" {
 > Gotchas from the article:
 > - **Restart ESO after creating its Pod Identity association.** Credentials are wired in when a pod starts; old pods get `AccessDenied`
 > - If the secret uses a **customer-managed KMS key**, the role also needs `kms:Decrypt` on it
-> - **Env vars are read once.** A rotated secret reaches the app only after a restart: mount it as a file, or use **Reloader** to restart on change
+> - **Env vars are read once.** A rotated secret reaches the app only after a restart: mount it as a file *if the app re-reads the file* (many read config once at startup; check the code), or use **Reloader** to restart on change
+> - **Check whether the app can serve its own secret.** Debug endpoints often expose the environment (`/env`, `/actuator/env`) or the config directory (podinfo's `/configs` returns every file in `--config-path`). If one does, neither env vars nor a file mount is safe until the endpoint is disabled in the app. Blocking it at the edge still leaves it reachable in-cluster, because NetworkPolicy can't filter by path
 
 ```yaml
 apiVersion: external-secrets.io/v1
