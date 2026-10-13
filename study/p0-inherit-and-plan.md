@@ -586,6 +586,139 @@ slow or fragile. Measure both.
 
 ---
 
+## P0-6 — Environment strategy
+
+<details>
+<summary><b>54. [R]</b> Why do non-prod environments share one cluster while prod gets its own?</summary>
+
+Cost vs blast radius. Non-prod environments can share a control plane,
+separated by namespaces, quotas, RBAC, NetworkPolicy and separate Argo CD
+apps, because an incident there hurts no users. Prod gets its own cluster so a
+bad CRD, a noisy load test, a cluster-wide add-on upgrade or a compromised dev
+workload can't touch it. Namespaces isolate workloads; they don't isolate the
+control plane, cluster-scoped resources or node-level compromise.
+</details>
+
+<details>
+<summary><b>55. [S] ★</b> The prod <code>terraform apply</code> job fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity". Dev works. The trust policy says <code>…:environment:prod</code>. What's wrong?</summary>
+
+The GitHub Environment is named `production`, so the OIDC token's `sub` is
+`repo:…:environment:production`, which doesn't match. Dev works because its
+names agree. One spelling of each env name in every system (P0-12) prevents
+this. The template itself had this bug (P5-3 said `production`, P5-2's trust
+policy said `prod`). It was fixed during the podinfo run. Debug by printing
+the token's claims in the job, not by widening the trust policy to `*`.
+</details>
+
+<details>
+<summary><b>56. [I]</b> Why promote the same image <b>digest</b> through environments instead of rebuilding per environment, or retagging?</summary>
+
+A rebuild produces a different artifact from the one you tested: new base
+layers, new dependency resolutions, a new SBOM. Tags are mutable pointers.
+`:1.4.0` today may not be `:1.4.0` tomorrow. A digest is the content hash, so
+"what ran in staging" is provably "what runs in prod". The signature and
+attestations (P7) attach to the digest, which is what admission (P8) verifies.
+Environment differences belong in config (gitops values), never in the image.
+</details>
+
+<details>
+<summary><b>57. [I]</b> Trunk-based development vs long-lived environment branches (<code>dev</code> → <code>qa</code> → <code>main</code>). Which, and why?</summary>
+
+Trunk-based: short branches merge to one default branch, and environments are
+folders in the gitops repo. Environment branches drift (hotfixes land in one
+and not another), merges between them become releases in their own right, and each branch
+tends to grow its own pipeline. With trunk + gitops folders, "what's in
+staging" is one file diff, and promotion is a reviewed commit.
+</details>
+
+<details>
+<summary><b>58. [S]</b> Your prod region goes down. You chose "no DR cluster, rebuild on demand". What's your RTO, and how do you know?</summary>
+
+Only a *measured* number counts: time to `terraform apply` a new cluster in
+another region, install add-ons, let Argo CD sync, restore data, and move
+DNS. Typically hours. If you've never rehearsed it, you don't have an RTO,
+just a guess. Rehearse it (P10), write the result in the ADR, and if the business
+needs less than that, that's the trigger for warm standby (P10-11).
+</details>
+
+<details>
+<summary><b>59. [I]</b> One AWS account or several? When do you split?</summary>
+
+One account is a house with locked rooms: IAM policies, names and tags are
+the only walls, and one mistake in IAM crosses them. Separate accounts per
+environment are separate houses: nothing crosses unless you build a door
+(cross-account role). Start with one while learning. Split when there is real
+customer data, a second team or person, or a compliance requirement (P12).
+Also split when billing and quotas need separating.
+</details>
+
+---
+
+## P0-7 — Budget and cost guardrails
+
+<details>
+<summary><b>60. [S] ★</b> Dev uses public subnets and no NAT to save money. What are the risks, and what compensates for them?</summary>
+
+Nodes are internet-addressable, so one wrong security group rule exposes them.
+Compensate with: no inbound rules beyond the cluster's own, no SSH (SSM only),
+the EKS API restricted to your `/32`, IMDSv2 with hop limit 1, Checkov on the
+Terraform, and destroying after every session. Also know the side effects:
+each public IPv4 is billed, dev's egress path differs from prod's (NAT), and
+add-ons that discover their region or VPC from IMDS need those set explicitly once pods
+can't reach IMDS. (ADR-0002)
+</details>
+
+<details>
+<summary><b>61. [S] ★</b> Next session, <code>kubectl</code> times out against the dev cluster. Nothing changed in Terraform. Likely cause, and the wrong fix?</summary>
+
+Your public IP changed (ISP, router restart, travel), and the EKS public
+endpoint only allows your old `/32`. Right fix: update the allowed CIDR
+variable and apply. Wrong fix: `0.0.0.0/0`, which puts the Kubernetes API
+on the internet, protected only by authentication.
+</details>
+
+<details>
+<summary><b>62. [S] ★</b> Your 100% budget alert arrived the morning after the session that overspent. Why so late, and what actually protects you?</summary>
+
+Billing data refreshes only a few times a day, so budgets alert on spend that
+already happened, often hours later. A budget is a backstop that catches the
+forgotten cluster on day 2 rather than day 30. The guard is the **teardown
+checklist** at the end of every session, plus a *forecasted* alert and Cost
+Anomaly Detection for earlier warning.
+</details>
+
+<details>
+<summary><b>63. [S] ★</b> P0-7 says to create a budget before anything else, but you have no SSO yet. Creating an access key "just for this" is tempting. Why not, and what instead?</summary>
+
+An access key is a long-lived credential. It sits in `~/.aws/credentials`,
+leaks through dotfile backups and screenshots, and outlives its purpose. It
+breaks the project's "no long-lived credentials" rule from the very first
+action. Instead: enable IAM Identity Center with one admin permission set and
+use `aws configure sso` (pulled forward from P5-1), or create the budget in
+the console. And look for old keys already on the machine. (Template P0-7 was
+fixed to say this.)
+</details>
+
+<details>
+<summary><b>64. [S]</b> Session 2's <code>terraform apply</code> fails: "You can't create this secret because a secret with this name is already scheduled for deletion." Why?</summary>
+
+Secrets Manager doesn't delete immediately: destroy schedules deletion with a
+7–30 day recovery window, and the name stays reserved. For `dev` only, set
+`recovery_window_in_days = 0` so destroy really deletes. Keep the window in
+prod, where recovery matters more than reuse.
+</details>
+
+<details>
+<summary><b>65. [S]</b> You put the Route 53 hosted zone in the session stack. After every apply, DNS for <code>podinfo.&lt;domain&gt;</code> doesn't resolve. Why?</summary>
+
+Each new hosted zone gets a new set of name servers, and the registrar still
+delegates to the old ones. Keep the hosted zone outside the per-session stack
+(it costs ~$0.50/month) and create and destroy only the records (ExternalDNS, P9).
+Same principle for anything referenced from outside AWS: keep it stable.
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -617,5 +750,5 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-6 environments · P0-7 budget alert · ADRs · threat model · NFRs ·
+- P0-7 Part B (budget created) · P0-8 ADR log · threat model · NFRs ·
   backlog
