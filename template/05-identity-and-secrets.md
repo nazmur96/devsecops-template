@@ -95,10 +95,10 @@ Three kinds of identity, three mechanisms:
 
 **Type:** Story · *Reference 07, SOCKPLAT-16*
 
-- [ ] Environments `dev`, `staging`, `production`; environment-scoped variables/secrets
-- [ ] `production`: required reviewer + wait timer; deployment branch rule `main` only
+- [ ] Environments `dev`, `staging`, `prod`; environment-scoped variables/secrets
+- [ ] `prod`: required reviewer + wait timer; deployment branch rule `main` only
 - [ ] Non-secret config via `vars`, not `secrets`
-- [ ] **Negative test:** a `dev` job can't read a `production` secret
+- [ ] **Negative test:** a `dev` job can't read a `prod` secret
 
 ---
 

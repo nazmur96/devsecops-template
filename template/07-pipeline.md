@@ -210,7 +210,7 @@ Reference 04's prod workflow pulled **`:latest`** and re-tagged it, so if a
 newer build landed after QA sign-off, an **untested image** went to production.
 
 - [ ] Promotion = a PR to the gitops repo that **copies the exact digest** from `envs/dev` → `envs/staging` → `envs/prod`. Nothing is rebuilt or re-tagged
-- [ ] `envs/prod` changes need a code-owner review **and** the GitHub `production` environment approval (P5-3)
+- [ ] `envs/prod` changes need a code-owner review **and** the GitHub `prod` environment approval (P5-3)
 - [ ] A small script or workflow (`promote.sh dev staging catalogue`) does the copy, so humans don't hand-edit digests
 - [ ] **One `main` branch, no environment branches** in the gitops repo: environments are folders (`envs/dev`, `envs/staging`, `envs/prod`). Branches per environment drift apart and promotion turns into merge conflicts (reference 09)
 - [ ] **Lower environments merge themselves; prod needs a human** (reference 09's ruleset trick):
@@ -230,7 +230,7 @@ newer build landed after QA sign-off, an **untested image** went to production.
 **Type:** Story
 
 - [ ] On PR to `platform/`: `terraform fmt -check`, `validate`, `tflint`, `checkov`, then `terraform plan` (read-only OIDC role) posted as a PR comment
-- [ ] On merge: `terraform apply` for dev automatically; prod behind the `production` environment approval
+- [ ] On merge: `terraform apply` for dev automatically; prod behind the `prod` environment approval
 - [ ] Nightly `terraform plan -detailed-exitcode` → alert on drift (P4-10)
 
 ---

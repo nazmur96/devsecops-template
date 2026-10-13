@@ -135,7 +135,7 @@ provider "aws" {
 - [ ] A `terraform-deployer` role in each account, **trusting only** the CI apply role (and the platform admins' SSO role)
 - [ ] State: one bucket per account, or a single state account with per-environment prefixes and bucket policies
 - [ ] `environments/{dev,staging,prod}` now differ in `account_id` as well as tfvars
-- [ ] The CI apply role for prod requires the GitHub `production` environment approval (P5-3)
+- [ ] The CI apply role for prod requires the GitHub `prod` environment approval (P5-3)
 
 ## P12-7 DNS delegation
 
