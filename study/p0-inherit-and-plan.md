@@ -227,11 +227,13 @@ Mitigation: path allow-list on the public HTTPRoute (P9), not "hope nobody finds
 
 Because `/env` dumps the environment. Any route to `/env` (a missed path on
 the HTTPRoute, a port-forward, a compromised pod in the namespace) leaks the
-key. Alternatives: mount the secret as `config.yaml` under `--config-path`
-(viper reads `jwt-secret` from it at startup, `main.go:93-100`), so it never
-appears in the environment; *and* block `/env` at the edge. Either way it
-still needs a restart to rotate. **Open decision for P5**, recorded in
-`questions.md` #18 and the manifest config table.
+key. The obvious alternative, mounting the secret as `config.yaml` under
+`--config-path`, **leaks too**: `GET /configs` returns every file in that
+directory (see #71). This answer used to recommend the file mount. That was
+wrong, and was caught at P0-8. The decision (ADR-0006): patch our build to
+disable `/env`, `/configs` and `/debug/pprof/`, *then* mount as a file, plus an
+edge allow-list and a CUJ step that checks they return 404. Rotation still
+needs a restart.
 </details>
 
 <details>
@@ -773,6 +775,54 @@ with an access key around "just in case".
 
 ---
 
+## P0-8 — ADR log
+
+<details>
+<summary><b>71. [S] ★</b> "Don't put the secret in an env var, mount it as a file instead." For podinfo, why is that advice wrong too?</summary>
+
+viper only reads `config.yaml` from `--config-path`, and podinfo also watches
+that directory and serves **the contents of every file in it** at
+`GET /configs` (`pkg/fscache/fscache.go` `updateCache` → `configs.go`). Env →
+`/env`, file → `/configs`: both standard injection paths are readable over HTTP.
+"Files are safer than env vars" is a generic rule. Check whether *this* app
+serves its config directory or environment (Spring's `/actuator/env` is the
+classic). Fix it in the app (disable the endpoints), not just at the edge:
+NetworkPolicy is L3/L4, so in-cluster callers can still hit the path.
+</details>
+
+<details>
+<summary><b>72. [R]</b> What goes in a "secrets approach" ADR, and what doesn't?</summary>
+
+**In:** where workload secrets live (Secrets Manager path convention), how they
+reach pods (ESO, CSI driver, env vs file), who may read which paths (IAM
+scope per env/service), rotation (and whether the app needs a restart), and how
+you prove it (CUJ negative steps). **Not in:** how *humans* sign in to AWS. That's
+an identity decision (here ADR-0004, Authentik). Mixing them hides the
+fact that a perfect human SSO setup still delivers zero secrets to pods.
+</details>
+
+<details>
+<summary><b>73. [I]</b> Why should CI never get cluster credentials or run <code>kubectl apply</code>?</summary>
+
+Blast radius. CI runs third-party actions and dependency code on every PR. If
+it holds cluster-admin, a compromised action owns production. With GitOps, CI's
+worst case is pushing an image (which admission rejects if unsigned) and
+committing a digest (reviewed, revertable). The cluster *pulls* desired state.
+Bonus: the gitops history is a complete deploy log, and rollback is `git revert`.
+</details>
+
+<details>
+<summary><b>74. [S]</b> Your platform needs an app change (disable debug endpoints). In a company you'd file a ticket for the dev team. In an OSS fork you <i>are</i> the dev team. How do you keep that from becoming a mess?</summary>
+
+Make the patch small, behind a flag (default safe), with a test, listed in the
+app repo (so upstream syncs know what to re-apply), and ideally sent upstream as
+a PR. Record *why* in an ADR. Then add a CUJ step that fails if an
+upstream sync silently brings the endpoint back. The same discipline applies in
+a company. The ticket just goes to someone else.
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -804,4 +854,4 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-8 ADR log · threat model · NFRs · backlog
+- P0-9 threat model · NFRs · backlog · P0-13 why EKS
