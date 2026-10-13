@@ -461,6 +461,131 @@ once and reusing it across all three keeps them consistent.
 
 ---
 
+## P0-4 — Criticality and rollout order
+
+<details>
+<summary><b>43. [R]</b> Why does P0-4 roll out low-criticality services first and critical ones last?</summary>
+
+The first services you move are where your patterns are still wrong: the
+Dockerfile, probes, policies and pipeline. Mistakes there should hit
+something that hurts little. By the time you move the critical service, those
+patterns have been fixed on cheaper failures. In a greenfield build the same
+rule decides which service you containerise and harden first as the
+pattern-setter.
+</details>
+
+<details>
+<summary><b>44. [I]</b> Who decides a service's criticality, and why not engineering?</summary>
+
+The product owner (or whoever owns the business outcome). Criticality is
+*business impact*: revenue, users, legal exposure. Engineers tend to rank by
+technical complexity or by what they're proud of. In an OSS/learning run with
+no product owner, write down the proxy you used (podinfo: "does it block the
+CUJ?") so the rule is visible, not implied.
+</details>
+
+<details>
+<summary><b>45. [S] ★</b> The template says the pilot must include a stateful component. Podinfo has none. What do you do?</summary>
+
+Deviate **explicitly**: write down that there's no stateful pilot and why
+(Redis out of v1, `/store` is emptyDir only). Also write down which lessons
+the pilot therefore *can't* teach: `startupProbe` (podinfo is ready in about 1s),
+backups/PVCs/DB migrations, connection pooling, multi-service NetworkPolicy.
+Say where you'll learn each one (Retail Store). A silent deviation means you
+think you covered something you didn't. (`platform/docs/rollout.md`)
+</details>
+
+---
+
+## P0-5 — Size from data, not guesses
+
+<details>
+<summary><b>46. [S] ★</b> 3 × <code>t3.medium</code>, memory 50% used, but the new canary pod is <code>Pending</code>: "0/3 nodes are available: Too many pods". Explain and fix.</summary>
+
+The VPC CNI gives each pod a real VPC IP, so pods per node are capped by
+ENIs and IPs: `t3.medium` = 17. Subtract ~6 DaemonSet pods per node and the
+cluster has ~33 slots. Argo CD (~7), Kyverno (~4), ESO (3), the LB controller,
+CoreDNS, metrics-server and Karpenter fill them before the app arrives. Fixes:
+bigger nodes (`t3.large` = 35), VPC CNI **prefix delegation** (assigns /28
+prefixes, about 110 pods/node), or fewer platform pods. Lesson: on EKS, size by
+pod count as well as CPU/memory.
+</details>
+
+<details>
+<summary><b>47. [R]</b> Max pods formula on EKS with the VPC CNI. Why "−1" and "+2"?</summary>
+
+`ENIs × (IPv4 per ENI − 1) + 2`. Each ENI's primary IP belongs to the ENI
+itself, not to pods (−1). `aws-node` and `kube-proxy` use host networking, so
+they don't consume an ENI IP but do count as pods (+2). `t3.medium`: 3 × (6 − 1)
++ 2 = 17. `t3.large`: 3 × (12 − 1) + 2 = 35. (The template used to say
+"ENIs × IPs". It was corrected during the podinfo run.)
+</details>
+
+<details>
+<summary><b>48. [S]</b> Greenfield, no metrics exist. How do you produce resource requests you can defend?</summary>
+
+Run the app under the **CUJ** load (P2 Compose with `docker stats`, then P3
+kind with `kubectl top`), take a high percentile, and set requests near
+steady state and the memory limit above peak. Then sum in this order:
+DaemonSets × nodes → platform pods → app × replicas (+ canary) → ×1.3
+headroom. Upstream defaults (podinfo's chart `1m`/`16Mi` vs kustomize
+`100m`/`64Mi`) are recorded as "claims", never used as the answer.
+</details>
+
+<details>
+<summary><b>49. [I] ★</b> Should podinfo have a CPU limit? A memory limit?</summary>
+
+**Memory limit: yes.** Memory can't be throttled, only killed, so the limit
+protects the node and its neighbours. **CPU limit: usually no.** CFS
+quotas throttle the container even when the node is idle, causing latency
+spikes. Requests already guarantee its share. For Go, also set `GOMEMLIMIT`
+(~90% of the memory limit) so the GC works hard *before* the OOM killer
+acts. Recent Go versions derive `GOMAXPROCS` from a CPU limit if one is set.
+Without one, Go sees all node cores, which is fine for a small binary.
+</details>
+
+<details>
+<summary><b>50. [S] ★</b> An idle dev cluster's control plane line on the bill is 6× what you expected. What happened?</summary>
+
+The cluster runs a Kubernetes version that left **standard support**, so
+EKS moved it to **extended support**: $0.60/h instead of $0.10/h. It's easy to
+miss when you reuse old Terraform pinned to an old version. Fix: create on a
+version in standard support, and check the EKS version calendar each run.
+</details>
+
+<details>
+<summary><b>51. [S] ★</b> You ran a 2-hour load test on <code>t3.large</code> nodes. The EC2 line is higher than the hourly rate explains. Why?</summary>
+
+T3 is burstable and launches in **unlimited** mode by default. Sustained CPU
+above baseline (30% for `t3.large`) spends surplus credits, which are billed
+per vCPU-hour. Keep load tests short, use `standard` credit mode (it throttles
+instead of billing), or run load tests on non-burstable `m`-family nodes.
+</details>
+
+<details>
+<summary><b>52. [S]</b> <code>terraform destroy</code> succeeded, but the next day's bill still shows a load balancer and EBS volumes. How?</summary>
+
+Kubernetes controllers created them, not Terraform. The AWS LB Controller
+makes ALBs/NLBs and security groups for `Ingress`/`Gateway`/`Service`, and the
+EBS CSI driver makes volumes for PVCs. They aren't in Terraform state, so
+`destroy` doesn't know about them (and they can block VPC deletion). Delete
+the K8s objects first and let the controllers clean up, then `destroy`, then
+check the console or bill the next day.
+</details>
+
+<details>
+<summary><b>53. [I]</b> "Destroy every session" works for learning. What replaces it for a real team's dev environment?</summary>
+
+Scheduled scale-down (nodes to zero outside working hours, Karpenter
+consolidation), right-sized requests (so bin-packing works), Spot for
+interruptible workloads, Savings Plans for the steady baseline, retention
+limits on observability, and budget alerts per account/team. Persistent
+environments are cheaper to keep than to recreate only when recreating is
+slow or fragile. Measure both.
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -492,5 +617,5 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-4 criticality · P0-5 sizing · P0-6 environments · P0-7 budget alert ·
-  ADRs · threat model · NFRs · backlog
+- P0-6 environments · P0-7 budget alert · ADRs · threat model · NFRs ·
+  backlog
