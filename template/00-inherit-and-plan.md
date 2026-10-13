@@ -14,6 +14,7 @@ point: *"designing Kubernetes is not a single-day activity"*.
 
 ```
 docs/
+├── questions.md          P0-1 gaps: answered-by-code + open (why / how we answer)
 ├── inventory.md          services, ports, datastores, dependencies, owners
 ├── cuj.md                the Critical User Journey (your universal test)
 ├── sizing-and-cost.md    measured or estimated resources, monthly cost
@@ -32,16 +33,73 @@ and in each app repo: MANIFEST.md, the service manifest (P0-2b)
 
 ## P0-1 Get access and read everything
 
-**Type:** Task
+**Type:** Task · **Output:** `questions.md` (scratch in the project folder; move into `platform/docs/` when that repo exists at P0-2)
 
-- [ ] Access to every repo, the issue tracker, the existing cloud account(s), any monitoring, and the docs wiki. **Get the code the right way first:** clone (company repo) or fork-then-clone (open source); the steps and the fork safety checklist are in [P1-0](01-dev-environment.md#p1-0-get-the-code-clone-fork-or-both)
-- [ ] Read each service's README, `package.json` / `pom.xml` / `go.mod`, Dockerfiles (if any), CI files, and env-var references (`grep -rn "getenv\|process.env\|System.getenv"`)
-- [ ] List the questions you couldn't answer from the code; book 30 minutes with the dev lead to go through them
-- [ ] **If the dev team didn't document how to run it locally, ask.** Reference 01: *"you have every right to question the developer"*
+- [ ] Access to every repo, the issue tracker, the existing cloud account(s), any monitoring, and the docs wiki. **Get the code the right way first:** clone (company repo) or fork-then-clone (open source); the steps and the fork safety checklist are in [P1-0](01-dev-environment.md#p1-0-get-the-code-clone-fork-or-both). For a practice-app fork, **re-verify** remotes, `gh` default repo, Actions off, and workflow-token read-only before you trust the tree
+- [ ] Read each service's README, dependency manifest (`go.mod` / `package.json` / `pom.xml` / `build.gradle*` / `Cargo.toml` / `requirements*.txt` / `pyproject.toml` / `Gemfile` / whatever the stack uses), Dockerfiles (if any), Helm/Kustomize/Timoni values (if any), CI files, and **all config/secret entry points** (quote globs in zsh). Search for whatever this stack actually uses, not only `getenv` — e.g. `os.Getenv` / `viper` / `flag.` (Go), `process.env` / `dotenv` (Node), `System.getenv` / `System.getProperty` / `@Value` / `application*.yml` / `.properties` (Java/Kotlin), `os.environ` / `getenv` / `pydantic` `BaseSettings` / `django.conf` (Python), `std::env` / `dotenvy` (Rust), `ENV[` / `Rails.application.credentials` (Ruby), plus hardcoded defaults (`SetDefault`, `default:`, `fallback`), mounted paths (`/var/run/secrets`, `config` volumes), and cloud SDKs that pull secrets at runtime
+- [ ] Write **`questions.md`** with two tables (below). Do not stop at "I don't know" — every open row needs a *How we answer it*
+- [ ] **Company repo:** book 30 minutes with the dev lead for the rows that need a human. **Open-source / practice app:** there is no dev lead — answer each row by **code**, **experiment** (later phase), or **ADR** (decision you own), and say which in the table
+- [ ] **If the app doesn't document how to run it locally, ask** (or, for OSS, treat that as a finding and write the run steps yourself in P1). Reference 01: *"you have every right to question the developer"*
+
+### What `questions.md` must contain
+
+```markdown
+# <app> — P0-1 questions
+
+## Access / fork state (verified <date>)
+| Check | Result |
+|---|---|
+| remotes / default repo / Actions / token / default branch | … |
+
+## Already answered by the code
+| Question | Answer | Source (file:line) |
+|---|---|---|
+
+## Open questions
+| # | Question | Why it matters | How we answer it |
+|---|---|---|---|
+| 1 | … | which later phase/control breaks if we guess | code | experiment in P… | ADR | ask <person> |
+```
+
+**Why the "Why it matters" column exists:** a beginner lists gaps; a platform engineer lists gaps *that change the design*. Port mismatch → 502s (P9). Hardcoded secret → P5 shape. `USER name` not UID → PSA/Kyverno reject (P8). Drain shorter than ALB deregistration → 502s on every rollout (P6/P9).
 
 **Worked example (Sock Shop):** the upstream deploy repo is **deprecated** and
 its manifests use drifted `:latest` images. That's a finding, not a blocker:
-record it as a constraint.
+record it as a constraint in the open-questions table.
+
+### Optional: use an AI assistant as a second reader
+
+You are still responsible for checking the answers against the code. The assistant's job is to **surface gaps you would not think to ask**, not to invent the inventory.
+
+Copy-paste prompt (adapt the paths):
+
+```text
+We're on template P0-1. Do not create AWS resources or new repos.
+
+1. Verify remotes / gh default repo / Actions / workflow-token permissions
+   (fork safety from P1-0).
+2. Walk README; the language dependency manifest(s); Dockerfile(s);
+   Helm / Kustomize / Timoni values if present; and .github/workflows
+   (or the CI this repo actually uses).
+3. Find every config and secret entry point for THIS stack — do not stop
+   at getenv. Cover, as applicable:
+   - Go: os.Getenv, viper, flag, cobra, SetDefault
+   - Node: process.env, dotenv, config packages
+   - Java/Kotlin: System.getenv/getProperty, @Value, application*.yml/.properties
+   - Python: os.environ, getenv, pydantic BaseSettings, django.conf
+   - Rust: std::env, dotenvy/clap env
+   - Ruby: ENV[], Rails credentials/secrets
+   - Also: hardcoded defaults/fallbacks, files under /var/run/secrets or
+     config volumes, and cloud SDKs that fetch secrets at runtime
+   Quote shell globs in zsh.
+4. Draft questions.md with: fork/access state; "already answered by the
+   code" (with file:line); "open questions" each with Why it matters and
+   How we answer it (code | experiment in Pn | ADR | ask a human).
+5. Flag anything that contradicts this DevSecOps template (branch name
+   main vs master, upstream Dockerfile vs "write your own", etc.).
+```
+
+Feed the result into P0-2 (inventory constraints) and P0-2b (manifest). Rows that are decisions become ADRs in P0-8.
 
 ---
 
