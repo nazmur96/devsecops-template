@@ -232,6 +232,20 @@ The single end-to-end path that proves the system works. Every "verify" step
 in later phases runs it; the load test (P10) automates it.
 
 - [ ] Written as user steps, with the services each step touches
+- [ ] **At least one step proves the app serves requests, not just that it's
+      healthy.** Health endpoints are often exempt from the app's own failure
+      paths (fault injection, middleware, dependency calls), so a sick pod can
+      answer 200 on `/healthz` and 500 on every real path. Assert response
+      bodies, not only status codes
+- [ ] **One step checks build identity**: a version/commit endpoint (or
+      header) whose value must equal what CI built. Without it, "the CUJ
+      passed" can't tell the new release from the old one still running.
+      Watch for defaults like `commit: "unknown"`, which still return 200
+- [ ] **A negative step for every secret that has a default in the code**
+      (JWT signing key, admin password, API key). For example, a token signed
+      with the upstream default must be rejected. The happy path passes with
+      the default as well, so only a negative step catches it. Add the step once P5
+      wires the real secret
 - [ ] A scripted version (curl / Playwright / k6) planned for P2
 
 **Worked example:** browse catalogue → register / log in → add to cart →
