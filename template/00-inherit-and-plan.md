@@ -394,8 +394,10 @@ Any real data in dev, or a second team member.
 
 **Type:** Story · **Output:** `docs/threat-model.md`
 
-- [ ] **Assets:** customer data (users, orders), credentials, the CI pipeline, the container registry, Terraform state
-- [ ] **Entry points:** public ALB, GitHub (PRs, Actions), the registry, cluster API, your laptop
+- [ ] **Assets:** customer data (users, orders), credentials, the CI pipeline, the container registry, Terraform state, **the identity provider** (whoever administers your IdP or Identity Center administers AWS), and **write access to the gitops repo** (a commit there is a deploy)
+- [ ] **Entry points:** public ALB, GitHub (PRs, Actions, and fork PRs if the repo is public), the registry, cluster API, your laptop, the IdP login, the **pod network** (in-cluster callers reach every route, and NetworkPolicy can't filter by path), and the supply chain (upstream syncs, dependencies, base images, third-party Actions)
+- [ ] **Walk the app's own routes from the code**, not the README: for each unauthenticated endpoint, what can a caller read, crash, fill or toggle? Debug and demo endpoints (`/env`, `/panic`, `/debug/pprof`, sleep/delay handlers) are the usual findings. Fix them in the app where you can. Edge rules protect only the internet path
+- [ ] **Look for existing long-lived credentials** in the account (`aws iam list-users` + `list-access-keys`), not just the ones you're about to create
 - [ ] **Top risks** using STRIDE, each mapped to the phase that mitigates it:
 
 | Risk | Example | Mitigated in |
