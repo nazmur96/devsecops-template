@@ -823,6 +823,74 @@ a company. The ticket just goes to someone else.
 
 ---
 
+## P0-9 — Threat model
+
+<details>
+<summary><b>75. [R]</b> What does each STRIDE letter mean? Give one podinfo-platform example per letter.</summary>
+
+| | Meaning | Example here |
+|---|---|---|
+| **S**poofing | Pretending to be someone | A leftover CI access key (`github-actions-ci`) used by whoever finds it |
+| **T**ampering | Changing something you shouldn't | Moving an image tag in ECR to a malicious build |
+| **R**epudiation | Denying you did it, because nothing records it | "Who changed prod?" with no gitops history or CloudTrail |
+| **I**nformation disclosure | Reading what you shouldn't | JWT key via `/env` or `/configs` |
+| **D**enial of service | Making it unavailable | `GET /panic` in a loop |
+| **E**levation of privilege | Gaining more rights | A pod role with `iam:*` in the management account |
+</details>
+
+<details>
+<summary><b>76. [S] ★</b> Your public route only allows the CUJ paths. Is <code>/panic</code> still a risk?</summary>
+
+Yes. The edge only protects the internet path. Any pod that NetworkPolicy
+lets reach `:9898` (or anyone with `port-forward`) can still call it, and
+NetworkPolicy is L3/L4, so it can't say "allow `/version` but not `/panic`".
+One request is `os.Exit(255)`, so a compromised neighbour pod can keep every
+replica crash-looping. Fix it in the app (gate the route, ADR-0008). The
+edge rule is defense in depth, not the fix.
+</details>
+
+<details>
+<summary><b>77. [S] ★</b> <code>/delay/{n}</code> has a 30s server write timeout in front of it. Why is it still a DoS?</summary>
+
+The handler calls `time.Sleep(n s)` without watching the request context. The
+timeout closes the *connection*, but the goroutine keeps sleeping for `n`
+seconds. `/delay/999999999` is a goroutine (and its memory) that never
+ends, for the cost of one request. Lesson: timeouts only help if the handler
+honours `r.Context()`. Look for sleeps, loops and outbound calls that ignore it.
+</details>
+
+<details>
+<summary><b>78. [S] ★</b> Podinfo's JWT key has a public default. Is that a critical vulnerability?</summary>
+
+For podinfo, less than it looks: `POST /token` hands a valid token to
+*anyone*, so the JWT guards nothing. The default key only adds the ability to
+*forge* tokens with chosen claims and expiry. It's still worth fixing,
+because it's the project's drill for handling real secrets (P5) and the habit has
+to be right before an app where the token *is* the access control (Bank of
+Anthos, Retail Store). Lesson: rate a risk by what it actually unlocks in
+*this* system, not by its category name.
+</details>
+
+<details>
+<summary><b>79. [I]</b> Why is the identity provider (Authentik, Okta, Identity Center) on the asset list?</summary>
+
+Because it's the front door: whoever administers the IdP can grant
+themselves the admin role in AWS, and federation means AWS will trust them. Protect it like
+the account root: MFA for admins, few admins, logging, and a break-glass
+path into AWS for when the IdP is down that doesn't involve a long-lived key.
+</details>
+
+<details>
+<summary><b>80. [S]</b> What is "denial of wallet", and what bounds it here?</summary>
+
+An attacker (or a bug) drives autoscaling: traffic → HPA adds pods →
+Karpenter adds nodes → the bill grows while the service "handles" it. Bounds:
+HPA `maxReplicas` and Karpenter limits (P6), WAF rate limits (P9), and the
+budget alert as a backstop (it lags by hours, so it's no use as a brake).
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -854,4 +922,4 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-9 threat model · NFRs · backlog · P0-13 why EKS
+- P0-10 NFRs · P0-11 backlog / sign-off · P0-11b ownership · P0-12 conventions · P0-13 why EKS
