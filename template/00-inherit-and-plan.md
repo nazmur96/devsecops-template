@@ -340,7 +340,8 @@ that changes is written down in [Phase 12](12-multi-account.md).
 
 **Type:** Task
 
-- [ ] AWS Budget with email alerts at 50 %, 80 %, 100 % of your monthly limit **before creating anything**
+- [ ] **First, sign in the right way.** This is the first AWS action of the project, and it comes before P5-1 sets up identity. Pull the minimum of P5-1 forward: enable IAM Identity Center, create one admin permission set for yourself, then `aws configure sso` and `aws sso login`. If that isn't possible yet, create the budget in the **console**. **Never create an access key to do it**, and check `~/.aws/credentials` for old ones (P4's "no access keys" check will flag them later anyway)
+- [ ] AWS Budget with email alerts at 50 %, 80 %, 100 % of your monthly limit **before creating anything**, plus a **forecasted** 100 % alert. Billing data lags by hours, so a budget is a backstop. The teardown checklist is the guard. Optionally add Cost Anomaly Detection (free) too
 - [ ] Cost model per phase in `sizing-and-cost.md` (EKS control plane, nodes, NAT gateways, ALB, interface endpoints, observability storage)
 - [ ] Teardown discipline: every infra phase ends with `terraform destroy` (or a stop schedule for dev)
 - [ ] Decide the cost-driven trade-offs explicitly, as ADRs (e.g. *no NAT gateway, public subnets, compensated by tight SGs*: reference 07 ADR-0005)
