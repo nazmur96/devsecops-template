@@ -915,6 +915,62 @@ every user. Verify the deletion by observing, not by trusting exit code 0.
 
 ---
 
+## P0-10 — Non-functional requirements
+
+<details>
+<summary><b>83. [R]</b> SLI, SLO, SLA, error budget: define each with a podinfo example.</summary>
+
+- **SLI**: what you measure. "Share of CUJ steps 1–6 that succeed."
+- **SLO**: your internal target for it. "99.5%."
+- **SLA**: a *contract* with consequences (refunds) if it's missed. None here.
+  An SLA should be looser than the SLO.
+- **Error budget**: 100% − SLO, as time or requests. 0.5% of a 30-day
+  window ≈ 3.6 h. Spend it on risky changes; when it's gone, freeze features
+  and fix reliability.
+</details>
+
+<details>
+<summary><b>84. [S] ★</b> The plan says HPA min 2, PDB <code>minAvailable: 2</code>. What happens on the next node upgrade?</summary>
+
+The drain can never evict a pod: evicting one would leave 1 < 2 available,
+so the PDB refuses. Node upgrades and Karpenter consolidation hang. Use min 3
+with PDB 2 (template P6), or PDB `maxUnavailable: 1`. Same trap, worse:
+`minAvailable: 1` on a 1-replica Deployment.
+</details>
+
+<details>
+<summary><b>85. [S] ★</b> You capped the cluster at exactly the 3-node floor "to protect the budget". What breaks?</summary>
+
+Anything that replaces nodes by adding first: managed node group rolling
+updates (surge), Karpenter drift/expiry replacement, AMI upgrades. They
+need a temporary extra node, so they stall or fall back to disruptive
+replacement. Cap with room for one surge node. In Karpenter, limits are
+CPU/memory on the NodePool, not a node count.
+</details>
+
+<details>
+<summary><b>86. [I]</b> Why keep "safety caps" separate from SLOs in the NFR doc?</summary>
+
+They answer different questions. SLOs say "how good must it be for users?" and
+you *aim* at them. Caps say "how bad can a flood, a bug or an attacker make the
+bill or the blast radius?" and you *never exceed* them (HPA max, quota,
+node limits, budget). Mixed together, someone raises a cap to "meet the SLO" and
+quietly removes the denial-of-wallet protection. Caps come from the threat model.
+SLOs come from the CUJ.
+</details>
+
+<details>
+<summary><b>87. [S]</b> Podinfo has no data. Why is "RPO: n/a" not the end of the DR conversation?</summary>
+
+Recovery still has an RTO: cluster, add-ons, secrets, DNS and certificates
+must come back, and the measured rebuild time is the RTO. Also, "no app data"
+isn't "no state": Terraform state (versioned S3), the gitops repo and the
+Secrets Manager values are what the rebuild depends on. Lose them and there's
+nothing to rebuild from. Write their protection down even when the app has no RPO.
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -946,4 +1002,4 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-10 NFRs · P0-11 backlog / sign-off · P0-11b ownership · P0-12 conventions · P0-13 why EKS
+- P0-11 backlog / sign-off · P0-11b ownership · P0-12 conventions · P0-13 why EKS
