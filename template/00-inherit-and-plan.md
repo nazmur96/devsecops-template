@@ -274,7 +274,7 @@ From reference 03: don't move everything at once.
 - [ ] **Existing system:** pull CPU / memory / disk per service from Prometheus, CloudWatch, or the VM bill (reference 03)
 - [ ] **Greenfield:** run the Compose stack in P2 under the CUJ load and record `docker stats`; revisit this ticket then
 - [ ] Sum requests per environment, add headroom (×1.3), add the platform overhead (observability, Argo CD, Kyverno, Falco ≈ 2–3 GiB)
-- [ ] Choose node size: **fewer, larger nodes** (reference 03), minimum 3 for spread. On EKS also check **max pods per node** (VPC CNI limit = ENIs × IPs, unless prefix delegation is on)
+- [ ] Choose node size: **fewer, larger nodes** (reference 03), minimum 3 for spread. On EKS also check **max pods per node**: with the VPC CNI and no prefix delegation it is `ENIs × (IPv4 per ENI − 1) + 2` (`t3.medium` = 17, `t3.large` = 35). Subtract the DaemonSet pods per node, then compare with the platform's Deployment pods (Argo CD alone is ~7). On a small cluster the **pod count** often runs out before memory: pods sit `Pending` with "Too many pods" while memory is free
 
 **Worked example:** four Java services make `t3.medium` (4 GiB) too small once
 observability is co-resident; `t3.large` (8 GiB) ×3 is the practical dev floor.
@@ -351,6 +351,8 @@ that changes is written down in [Phase 12](12-multi-account.md).
 | Interface VPC endpoints | ~$7/mo **per AZ each** | Gateway endpoints (S3/DynamoDB) are free; interface only when needed |
 | Idle EKS | ~$73/mo control plane | Destroy between sessions |
 | Observability storage | grows silently | Retention limits from day one |
+| EKS **extended support** | control plane **$0.60/h** (6×) once the Kubernetes version leaves standard support | Create clusters on a version in standard support; check the EKS version calendar each run |
+| T3/T4g **unlimited** credits | load tests above baseline CPU are billed as surplus credits | Short load tests, `standard` credit mode, or non-burstable nodes for load runs |
 
 ---
 
