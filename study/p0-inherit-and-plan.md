@@ -717,6 +717,60 @@ delegates to the old ones. Keep the hosted zone outside the per-session stack
 Same principle for anything referenced from outside AWS: keep it stable.
 </details>
 
+<details>
+<summary><b>66. [S] ★</b> You were about to enable IAM Identity Center for SSO, then noticed the console shows you signed in as <code>AuthentikAdmin/…</code>. Why stop?</summary>
+
+You already have federated, keyless human access: your own IdP (Authentik)
+signs you in to an IAM role, and `aws login` gives the CLI short-lived
+credentials. Identity Center would be a **second owner of the same layer**:
+two places to grant and revoke access, two to audit. It would also create an AWS
+Organization and make the account its management account. Look at what
+exists before adding anything. In the podinfo run this became ADR-0004, which
+superseded ADR-0003 before it was ever implemented.
+</details>
+
+<details>
+<summary><b>67. [R]</b> ADR-0003 turned out wrong an hour after it was accepted. Do you edit it?</summary>
+
+No. Set its status to **Superseded by ADR-0004** and write the new decision
+in a new ADR that says what it supersedes and why. The log is a history: the
+reason you *didn't* do something is as useful in an interview or review as
+the reason you did. Only fix typos in place.
+</details>
+
+<details>
+<summary><b>68. [S] ★</b> You create a $40 budget. A $20 account-wide budget already exists. What's the problem?</summary>
+
+Both watch the same total spend, so the $20 alerts always fire first and the
+$40 one never tells you anything new. Two budgets also look like two limits
+in any later review. List existing budgets first, then replace (create the new one,
+verify its alerts and subscribers, then delete the old one) rather than stack them.
+Separate budgets only make sense when they're *filtered* differently (per
+tag, service or linked account).
+</details>
+
+<details>
+<summary><b>69. [S] ★</b> You delete your old access key and the "no keys" check still fails: another IAM user, <code>github-actions-ci</code>, has one. What is it, and what replaces it?</summary>
+
+A long-lived CI credential, probably stored as a GitHub secret by an earlier
+project. Anyone who can read repo secrets or run a workflow can use it until
+it's rotated. It's replaced by **GitHub OIDC** (P5-2): the workflow requests
+a short-lived token, and AWS lets it assume a role whose trust policy names
+the exact repo and branch/environment. Before deleting it: check last-used,
+find which repos hold it as a secret, and remove it there too. Otherwise the
+next run fails confusingly.
+</details>
+
+<details>
+<summary><b>70. [I]</b> Your human access depends on a self-hosted IdP. What happens when it's down, and what do you prepare?</summary>
+
+No federated sign-in, so no console or CLI. Prepare a **break-glass** path:
+the root user (hardware MFA, credentials stored offline), used only when the
+IdP is down, with CloudTrail alerting on any root sign-in. Write the procedure in
+the runbook and rehearse it once. Never "fix" this by keeping an IAM user
+with an access key around "just in case".
+</details>
+
 ---
 
 ## Meta — how we work
@@ -750,5 +804,4 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-7 Part B (budget created) · P0-8 ADR log · threat model · NFRs ·
-  backlog
+- P0-8 ADR log · threat model · NFRs · backlog
