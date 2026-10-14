@@ -417,7 +417,7 @@ says where the reference projects differ.
 3. **Copy each phase's tickets into your tracker** as you reach it. IDs like `P4-3` map straight onto a Jira key.
 4. **Write an ADR** whenever a ticket says *Decision* (template in [P0-8](template/00-inherit-and-plan.md#p0-8-start-the-adr-log)).
 5. **Keep evidence as you go:** screenshots and logs of every drill go into `docs/evidence/`, ready for [P11](template/11-present-it.md).
-6. **Test yourself after each phase** with its [study bank](study/p0-inherit-and-plan.md): review, scenario and interview questions with answers. Add a question whenever a run surprises you.
+6. **Test yourself after each phase** with its [study bank](study/p0-inherit-and-plan.md): mock-interview cases (a scenario, then the follow-ups an interviewer pushes with), each with a model answer. Add a follow-up whenever a run surprises you.
 
 ---
 
@@ -546,7 +546,7 @@ why the budget alert comes first.
 │   ├── COMMON-MISTAKES.md everything the reference projects got wrong, by phase
 │   ├── DAY-2-OPERATIONS.md running it: rhythm, troubleshooting path, 18 incidents, drills
 │   └── WHEN-IT-ALL-RUNS-TOGETHER.md  the system view: where tools overlap, is it worth adding
-├── study/                 review + interview question bank, one file per phase (pN-*.md)
+├── study/                 mock-interview cases per phase (pN-*.md)
 ├── PRACTICE-APPS.md       which app to run through the template, in what order
 ├── cursor/                Cursor rule to copy into each project folder (P1-0)
 ├── DEVSECOPS-GUIDE.md     the three-layer model the template is built on
