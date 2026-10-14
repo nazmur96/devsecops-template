@@ -140,7 +140,7 @@ Folder layout of the gitops repo:
     └── prod/     values.yaml   digests promoted from staging, reviewed
 ```
 
-- [ ] `<app>-gitops` repo created, private, with branch protection on `main` and `CODEOWNERS` requiring review for `envs/prod/`
+- [ ] `<app>-gitops` repo created, private, with branch protection on `main` and `CODEOWNERS` requiring review for `envs/prod/` (one-person repo: see the solo note in P0-11b)
 - [ ] The only automated writer is CI's **GitHub App** token (P7-4), allowed to change `envs/dev/` digests
 - [ ] **No secrets in this repo, ever**: only references (ExternalSecret objects, role names, paths)
 

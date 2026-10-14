@@ -432,6 +432,8 @@ Any real data in dev, or a second team member.
 - [ ] Mark optional tickets `[OPT]` so skipping them is a visible choice
 - [ ] Share inventory + sizing + cost + environments + NFRs with the dev lead and manager. **Reference 03:** *"a lot of people prepare this document but keep it to themselves"*
 - [ ] Agreement recorded (comment, email, or meeting note linked in `docs/`)
+- [ ] **Solo or learning project** (no dev lead, no manager): sign-off is a dated "accepted" line at the end of `docs/backlog.md`, listing the docs reviewed and the next gate, committed. Changing scope later = a commit to that file
+- [ ] Keep the backlog to **ticket ID + one line**; the phase files hold the detail. Mark tickets the app can't exercise as `n/a` with where you'll learn them instead (e.g. "no DB → next app"), so skipping is visible, like `[OPT]`
 
 ---
 
@@ -453,6 +455,7 @@ thought the other would roll back. No Terraform fixes an unstated assumption.
 | Versioning | Environment config | **Who owns each service manifest** (P0-2b) as the app changes |
 
 - [ ] The five agreements written down, linked from each app repo's README
+- [ ] **One-person repos:** GitHub never lets a PR author approve their own PR, so "require review from code owners" on `envs/prod/` blocks you forever, or trains you to bypass as admin. Solo, the enforced prod gate is the **GitHub Environment `prod` required reviewer** (self-review allowed: a deliberate, logged click); keep `CODEOWNERS` as documentation and turn code-owner review on the day a second person joins
 - [ ] **During incidents:** pages are routed **by layer, not seniority**: load balancer 5xx, node and pod failures page platform; app errors page the dev team; unclear ones page both. **One incident commander**; two people fixing in opposite directions is how incidents get worse (P10-8c)
 - [ ] Console or `kubectl` changes made during an incident are reconciled back into Git within 24 hours
 - [ ] Developers are told **before** a secret rotation if their service needs a restart to pick it up
@@ -476,7 +479,7 @@ what's what. Pick a pattern now, before the first resource exists.
 | Secrets Manager paths | `{project}/{env}/{service}/{name}` | `sockshop/dev/catalogue/db` | IAM policies match the prefix (P5-5) |
 | ECR repositories | `{project}/{service}` | `sockshop/carts` | Terraform `for_each` (P4-7) |
 | Image tags | `{git-sha}`; releases `v{semver}`; **never `latest`** | `sockshop/carts:3f2a9c1…`, `v1.4.0` | ECR immutability; Kyverno (P8-6) |
-| Kubernetes namespaces | `{team}` or `{app}`; platform ones by tool | `sock-shop`, `observability`, `argocd` | review |
+| Kubernetes namespaces | `{team}` or `{app}` only if each env has its own cluster; **`{app}-{env}` if envs share a cluster** (the P0-6 default puts dev + staging on one); platform ones by tool | `sock-shop` or `sock-shop-dev`, `sock-shop-staging`; `observability`, `argocd` | review; Argo CD `destination.namespace` |
 | ServiceAccounts | `{service}` for the app; `{service}-{job}` for extra roles | `carts`, `carts-migrate` | Kyverno: no pod uses `default` (P5-4b) |
 | Kubernetes labels | `app.kubernetes.io/{name,instance,component,part-of,managed-by}` | `name: carts`, `part-of: sockshop` | Kyverno `require-labels` (P8-6) |
 | Terraform | modules `snake_case` folders; resources named by role (`this`, `main`), not by env | `module "vpc"`, `aws_eks_cluster.this` | `tflint` |
