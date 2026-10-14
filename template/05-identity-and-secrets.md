@@ -82,6 +82,8 @@ Three kinds of identity, three mechanisms:
 | `sockshop-ci-plan` | `repo:<org>/sockshop-platform:pull_request` | read-only + state read (for `terraform plan` on PRs) |
 | `sockshop-ci-apply` | `repo:<org>/sockshop-platform:environment:prod` | Terraform apply; requires the GitHub `prod` environment's reviewer |
 
+`sockshop-platform` is the platform repo's **GitHub** name (P1-1); a `sub` claim always uses the GitHub name, never the local folder name `platform`.
+
 - [ ] OIDC provider and roles **in Terraform**, not CLI commands (reference 04 did it imperatively)
 - [ ] `sub` pinned to a branch or environment, **never `repo:<org>/<repo>:*`** (reference 06's trust allowed any branch or PR to assume the role)
 - [ ] **Negative tests:** a workflow on another branch fails to assume the role; the build role can't call `ec2:*` or `iam:*`

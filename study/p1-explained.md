@@ -201,6 +201,13 @@ There are three different jobs, so there are three repos:
 | **Platform** (`platform`) | Terraform: VPC, EKS, IAM, ECR | What infrastructure does it run on? | Platform engineers |
 | **GitOps** (`podinfo-gitops`) | Helm values per environment, Argo CD apps | Which version runs where, with what settings? | CI (image digests only) and platform engineers |
 
+The platform repo is always called `platform` in the project folder. On
+GitHub its name must be unique in your account, so it's `<app>-platform`
+(`nazmur96/podinfo-platform`), cloned with
+`gh repo clone nazmur96/podinfo-platform platform`. Anything that matches on
+the GitHub name, like the AWS trust policy for CI (P5), uses
+`podinfo-platform`.
+
 While learning, app and platform code *may* share a repo. **The GitOps repo is
 always separate.** Record the layout in an ADR.
 

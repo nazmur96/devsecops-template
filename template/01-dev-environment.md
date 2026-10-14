@@ -100,8 +100,10 @@ What's different in a real job, in more detail:
 | Repo | Contains | Who changes it |
 |---|---|---|
 | `<app>` | Service source, Dockerfiles, CI workflows, `mise.toml`, `devcontainer.json` | Developers + CI |
-| `<app>-platform` | Terraform (state backend, VPC, EKS, IAM, ECR, data stores) | Platform engineers |
+| `platform` | Terraform (state backend, VPC, EKS, IAM, ECR, data stores) | Platform engineers |
 | `<app>-gitops` | Helm values / manifests per environment, Argo CD apps | CI (image digests) + platform engineers |
+
+**Names:** the platform repo is always `platform` in the project folder and in these docs. On GitHub it needs a name that is unique in your account, so call it `<app>-platform` (`nazmur96/podinfo-platform`) and clone it into the folder name: `gh repo clone <you>/<app>-platform platform`. Anything that matches on the **GitHub** name (OIDC `sub` claims in P5-2, branch protection, `gh` commands) uses `<app>-platform`.
 
 - [ ] Layout chosen and recorded as an ADR. App code and platform code may share a repo while learning, but the **GitOps repo is always separate** (below)
 - [ ] Each repo has `README.md`, `.gitignore`, `.editorconfig`, `CODEOWNERS`, branch protection on `main` (PR required, status checks required, no force-push)
@@ -212,7 +214,7 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
 ```jsonc
 // .devcontainer/devcontainer.json
 {
-  "name": "sockshop-platform",
+  "name": "sockshop",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     // needed for docker build / kind inside the container
