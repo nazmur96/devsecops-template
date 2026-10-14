@@ -1,7 +1,8 @@
 # Phase 1 explained simply
 
 A plain-English walk through [Phase 1: Workstation & dev environment](../template/01-dev-environment.md).
-Read it before you start the phase.
+Read it before you start the phase. Then test yourself with the
+[Phase 1 interview cases](p1-dev-environment.md).
 
 Examples use the **Podinfo** run (fork
 [`nazmur96/podinfo`](https://github.com/nazmur96/podinfo), a small Go app).
@@ -789,4 +790,5 @@ you on a new machine, can rebuild everything from committed files. And you
 know what the app does, what it depends on, and how it behaves when things go
 wrong, before Kubernetes adds its own problems.
 
-**Next:** [Phase 2: build the container image](../template/02-containerise.md).
+**Next:** practise with the [Phase 1 interview cases](p1-dev-environment.md), then
+[Phase 2: build the container image](../template/02-containerise.md).
