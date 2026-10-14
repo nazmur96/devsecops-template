@@ -5,6 +5,9 @@ Interview practice for [Phase 0](../template/00-inherit-and-plan.md). Each
 scene and asks an open question, then pushes with follow-ups to see how deep
 your understanding goes.
 
+**New to Phase 0?** Read [Phase 0 explained simply](p0-explained.md) first,
+then come back here to practise.
+
 **How to use it:** treat it as a mock interview. Read the scene, answer out
 loud for about two minutes, *then* open the model answer. Do the follow-ups
 the same way. There is rarely one right answer. The model answer shows the
@@ -25,8 +28,6 @@ stories: "on a project I did, I found…" beats any definition.
 numbering. Phrase it as something an interviewer would say, give the model
 answer, and cite the file/line, ADR or RCA that proves it. Never renumber
 existing cases or follow-ups: references like "study P0 6.2" must stay valid.
-Numbers from before the 2026-10-14 reformat are mapped at the
-[end of this file](#old-question-numbers).
 
 ---
 
@@ -1609,37 +1610,3 @@ versioned, reviewed or backed up, and the next person, or the next session,
 can't find them. That's why `questions.md` and the RCAs moved into the
 platform repo.
 </details>
-
----
-
-## Old question numbers
-
-Before 2026-10-14 this bank used flat numbers 1–93. Old references (for
-example "study P0 #22" in Podinfo's ADR-0006) map like this:
-
-| Old | New | Old | New | Old | New | Old | New |
-|---|---|---|---|---|---|---|---|
-| 1 | 1 | 25 | 7.1 | 49 | 11.3 | 73 | 19.3 |
-| 2 | 1.2 | 26 | 5.1 | 50 | 12.1 | 74 | 3.3 |
-| 3 | 1.1 | 27 | 7.2 | 51 | 12.2 | 75 | 21 |
-| 4 | 3 | 28 | 6.3 | 52 | 18.3 | 76 | 21.2 |
-| 5 | 3.1 | 29 | 21.4 | 53 | 12.3 | 77 | 21.3 |
-| 6 | 2.1 | 30 | 5.3 | 54 | 13 | 78 | 20.2 |
-| 7 | 2.2 | 31 | 8.1 | 55 | 14.2 | 79 | 16.3 |
-| 8 | 2.3 | 32 | 8 | 56 | 14 | 80 | 21.6 |
-| 9 | 2 | 33 | 9 | 57 | 14.1 | 81 | 21.5 |
-| 10 | 2.4 | 34 | 9.1 | 58 | 13.1 | 82 | 16.1 |
-| 11 | 2.5 | 35 | 9.2 | 59 | 13.2 | 83 | 22 |
-| 12 | 4.2 | 36 | 9.3 | 60 | 17 | 84 | 22.3 |
-| 13 | 4.1 | 37 | 8.2 | 61 | 17.1 | 85 | 22.4 |
-| 14 | 4 | 38 | 8.3 | 62 | 15.4 | 86 | 22.2 |
-| 15 | 20.1 | 39 | 7 | 63 | 15.1 | 87 | 22.5 |
-| 16 | 21.1 | 40 | 25 | 64 | 18.1 | 88 | 23.3 |
-| 17 | 20 | 41 | 25.1 | 65 | 18.2 | 89 | 23.2 |
-| 18 | 3.2 | 42 | 25.2 | 66 | 15.2 | 90 | 13.3 |
-| 19 | 5.2 | 43 | 10 | 67 | 19.1 | 91 | 23.1 |
-| 20 | 6 | 44 | 10.1 | 68 | 15.3 | 92 | 20.4 |
-| 21 | 5.4 | 45 | 10.2 | 69 | 16 | 93 | 14.3 |
-| 22 | 20.3 | 46 | 11.1 | 70 | 16.2 | | |
-| 23 | 6.1 | 47 | 11.2 | 71 | 20 | | |
-| 24 | 6.2 | 48 | 11 | 72 | 19.2 | | |
