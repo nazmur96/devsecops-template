@@ -971,6 +971,70 @@ nothing to rebuild from. Write their protection down even when the app has no RP
 
 ---
 
+## P0-11 / P0-11b / P0-12 — Backlog, ownership, conventions
+
+<details>
+<summary><b>88. [R]</b> What's the difference between <code>[OPT]</code> and <code>n/a</code> in the backlog, and why mark either?</summary>
+
+`[OPT]` is a ticket the app *could* do but you choose to skip (OpenBao,
+Cilium, mesh). `n/a` is one the app *can't* exercise (schema migrations with
+no DB), with where you'll learn it instead (Retail Store). Both make the skip
+visible. A deleted ticket looks the same as a forgotten one.
+</details>
+
+<details>
+<summary><b>89. [S] ★</b> Your gitops repo requires a code-owner review on <code>envs/prod/</code>, and you're the only code owner. What happens, and what do you do?</summary>
+
+GitHub never lets a PR author approve their own PR, so the promotion can
+never merge, unless you bypass as admin every time, which trains you to
+ignore the gate. Solo: enforce prod with the GitHub Environment `prod`
+required reviewer (self-review allowed, a deliberate logged click), keep
+`CODEOWNERS` as documentation, and turn code-owner review on when a second
+person joins. Name the control that's actually enforced.
+</details>
+
+<details>
+<summary><b>90. [S] ★</b> The plan says "namespace <code>podinfo</code> in every env". dev and staging share the non-prod cluster. What goes wrong?</summary>
+
+Both envs sync into the same namespace. Argo CD has two apps fighting over
+the same Deployment, and staging is whatever dev last wrote. A naming rule
+depends on the topology: one cluster per env → `{app}` works; shared cluster →
+`{app}-{env}` (`podinfo-dev`, `podinfo-staging`). Check the conventions table
+against the cluster decision (P0-6).
+</details>
+
+<details>
+<summary><b>91. [I]</b> You're dev and platform at once. Why write an ownership contract at all?</summary>
+
+The failures it prevents are unstated assumptions: "tests passed so it's
+live", "the other side will roll back", "nobody told me the secret rotation
+restarts pods". Writing it says which hat makes which call, and that's what a
+second person (or interviewer) joins. It also forces concrete rules: never
+`latest`, CRITICAL/HIGH blocks, either hat may `git revert`, console fixes back
+in Git within 24 h.
+</details>
+
+<details>
+<summary><b>92. [S]</b> You rotate podinfo's JWT key mid-session and the CUJ fails at step 6. Incident?</summary>
+
+Expected, if it clears when the rollout finishes. The key is read at start,
+so old and new pods hold different keys. A token issued by a new pod fails
+validation on an old one. That's why the contract says announce rotations
+first. It becomes an incident if step 6 still fails after every pod has
+restarted, which means the new key didn't reach the pods (ESO, mount, path).
+</details>
+
+<details>
+<summary><b>93. [R]</b> Name four places one misspelled environment name (<code>production</code> vs <code>prod</code>) breaks something.</summary>
+
+The OIDC trust policy's `environment:prod` claim (AssumeRole fails silently
+as AccessDenied), Secrets Manager prefix policies (`podinfo/prod/*`), tag-based
+cost reports (two buckets for one env), and DNS/namespace names that Argo CD
+or NetworkPolicies reference. One spelling, everywhere, including GitHub Environments.
+</details>
+
+---
+
 ## Meta — how we work
 
 <details>
@@ -1002,4 +1066,4 @@ project folder aren't versioned, reviewed or backed up, and the next person
 
 ## To add as we go
 
-- P0-11 backlog / sign-off · P0-11b ownership · P0-12 conventions · P0-13 why EKS
+- P0-13 why EKS · Phase 0 Prove it
