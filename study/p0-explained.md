@@ -644,5 +644,5 @@ knowing how to design a platform that runs it safely.
 - Every decision you make in later phases points back to an ADR or a
   requirement from Phase 0.
 
-**Next:** practise answering out loud with the
+**Next:** [Phase 1 explained simply](p1-explained.md). But first, practise answering out loud with the
 [Phase 0 interview cases](p0-inherit-and-plan.md).
