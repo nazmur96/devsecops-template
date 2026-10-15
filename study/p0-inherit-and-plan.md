@@ -25,8 +25,9 @@ stories: "on a project I did, I found…" beats any definition.
 
 **Adding a question:** add a follow-up under the case it belongs to
 (next number, e.g. `6.4`), or a new case at the end of its section's
-numbering. Phrase it as something an interviewer would say, give the model
-answer, and cite the file/line, ADR or RCA that proves it. Never renumber
+numbering. Phrase it as something an interviewer would say. Write the model answer
+the way you would say it out loud: short paragraphs or **Key points:** bullets,
+never a table. Give the model answer and cite the file/line, ADR or RCA that proves it. Never renumber
 existing cases or follow-ups: references like "study P0 6.2" must stay valid.
 
 ---
@@ -207,16 +208,26 @@ evidence.
 <details>
 <summary><b>Model answer</b></summary>
 
-| Check | Prevents |
-|---|---|
-| Actions disabled on the fork | Upstream workflows running on *my* repo: burning minutes, failing on missing secrets, or trying to publish |
-| Default workflow token = read-only | A workflow (once enabled) writing to the repo or packages without being granted it explicitly |
-| `upstream` push URL set to `no-pushing-to-upstream` | Accidentally pushing to someone else's project |
-| `gh repo set-default` = my fork | `gh pr create` silently targeting upstream |
-| Default branch noted (`master` vs `main`) | Workflow triggers and OIDC trust policies written for `main` that never match |
+A fork copies the original project's pipelines, so before anything else I
+make sure nothing can run or push by accident.
 
-And I verify each one by observing it (`gh api …/actions/permissions`), not
-by trusting that I clicked the setting.
+**Key points:**
+
+- **Turn GitHub Actions off.** Otherwise the original project's workflows run
+  in *my* repo: burning minutes, failing on missing secrets, or trying to
+  publish.
+- **Make the workflow token read-only.** When I turn Actions back on later, no
+  workflow can write to the repo or its packages unless I grant it.
+- **Make pushing to the original impossible.** I set the `upstream` push URL
+  to a dead address, so a stray push fails instead of landing on someone
+  else's project.
+- **Point the `gh` CLI at my fork** (`gh repo set-default`). Otherwise
+  `gh pr create` can quietly open PRs against the original.
+- **Note the default branch name** (`master` or `main`). Workflow triggers and
+  AWS trust policies written for the wrong name never match.
+
+And I check each one by reading it back (`gh api …/actions/permissions`),
+not by trusting that I clicked the setting.
 </details>
 
 **Follow-ups**
@@ -303,17 +314,22 @@ an OTLP collector (`--otel-service-name`, endpoint from
 
 Every column feeds a later decision:
 
-| Column | Feeds |
-|---|---|
-| Port(s) | Service, probes, load balancer target group |
-| Health endpoint | Probes, load balancer health checks |
-| Datastore | Data plan, backups, secrets |
-| Sync callers / callees | The NetworkPolicy allow-list |
-| Async (queue) links | Queue infrastructure, idempotency, queue-based scaling |
-| Owner | Who gets paged, who approves changes |
-| Constraints | Tickets: hardcoded credentials, no SIGTERM handling, EOL runtimes, licences |
+Every column in it feeds a later decision.
 
-If a column feeds nothing, drop it.
+**Key points:**
+
+- **Ports** become the Kubernetes Service, the probes and the load balancer
+  target.
+- **Health endpoints** become the probes and the load balancer health checks.
+- **Datastores** drive the data plan: backups, and which secrets exist.
+- **Who calls whom** becomes the network policy allow-list.
+- **Queue links** drive the queue setup, the "can it handle a message twice?"
+  question, and queue-based scaling.
+- **The owner** is who gets paged and who approves changes.
+- **Constraints** (hardcoded credentials, no SIGTERM handling, old runtimes,
+  licences) become tickets.
+
+If a column feeds nothing, I drop it.
 </details>
 
 ---
@@ -1267,15 +1283,17 @@ fails after every pod has restarted: then the new key didn't reach the pods
 3. **The app's own routes, from the code, not the README:** for each
    unauthenticated endpoint, what can a caller read, crash, fill or toggle?
 4. **Top risks with STRIDE**, each mapped to the control that mitigates it:
-
-| | Meaning | Example |
-|---|---|---|
-| **S**poofing | Pretending to be someone | A leftover CI access key used by whoever finds it |
-| **T**ampering | Changing what you shouldn't | An image tag moved to a malicious build |
-| **R**epudiation | Denying it, because nothing records it | "Who changed prod?" with no gitops history or CloudTrail |
-| **I**nformation disclosure | Reading what you shouldn't | A secret via `/env` |
-| **D**enial of service | Making it unavailable | `GET /panic` in a loop |
-| **E**levation of privilege | Gaining more rights | A pod role with `iam:*` |
+   - **Spoofing**, pretending to be someone: a leftover CI access key used by
+     whoever finds it.
+   - **Tampering**, changing what you shouldn't: an image tag moved to a
+     malicious build.
+   - **Repudiation**, nobody can prove who did it: "who changed prod?" with
+     no gitops history or CloudTrail.
+   - **Information disclosure**, reading what you shouldn't: a secret read
+     through `/env`.
+   - **Denial of service**, making it unavailable: `GET /panic` in a loop.
+   - **Elevation of privilege**, gaining more rights: a pod whose IAM role
+     allows `iam:*`.
 
 Also: look for **existing** long-lived credentials in the account, not just
 the ones I'm about to create.
@@ -1286,17 +1304,24 @@ the ones I'm about to create.
 <details>
 <summary><b>21.1 ★</b> "Walking the routes, you find debug and demo endpoints. What can an attacker do with each if it's public?"</summary>
 
-**In the Podinfo run:**
+For each one I ask: what can a stranger read, crash, fill or switch off?
 
-| Endpoint | Abuse |
-|---|---|
-| `/env` | Every env var, **including any secret injected as one** |
-| `/debug/pprof/` | Heap profiles can contain secrets in memory; CPU profiling costs CPU on demand |
-| `/panic` | Kills the process. In a loop: a crash loop (DoS) |
-| `/fault_injection/enable`, `/readyz/disable` | Make a replica fail or leave the load balancer on purpose |
-| `/store` | Unauthenticated writes to `/data`; with no size limit → node disk pressure → evictions |
-| `/delay/{s}`, `/chunked/{s}` | Hold connections open cheaply → exhaustion |
-| `/metrics` | Internal names, versions and traffic shape: useful recon |
+**Key points, from the Podinfo run:**
+
+- **`/env`** prints every environment variable, including any secret
+  injected as one.
+- **`/debug/pprof/`** hands out memory dumps, which can contain secrets, and
+  lets anyone burn CPU on demand.
+- **`/panic`** kills the process. Called in a loop, it keeps the app
+  crash-looping.
+- **`/fault_injection/enable` and `/readyz/disable`** let anyone make a copy
+  of the app fail, or pull it out of the load balancer.
+- **`/store`** accepts unauthenticated uploads to `/data`. With no size
+  limit, that fills the node's disk and gets pods evicted.
+- **`/delay` and `/chunked`** hold connections open cheaply, until the app
+  runs out.
+- **`/metrics`** shows internal names, versions and traffic patterns: useful
+  scouting for an attacker.
 </details>
 
 <details>

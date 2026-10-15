@@ -220,14 +220,18 @@ look for a way around it.
 <details>
 <summary><b>Model answer</b></summary>
 
-Because they're three different jobs, with different people and different
-risks:
+Because they're three different jobs, done by different people, with
+different risks.
 
-| Repo | Answers | Changed by |
-|---|---|---|
-| **App** | How do we build and test it? | Developers and CI |
-| **Platform** | What infrastructure does it run on? | Platform engineers |
-| **GitOps** | Which version runs where, with what settings? | CI (image digests only) and platform engineers |
+**Key points:**
+
+- **The app repo** answers "how do we build and test it?" Developers and CI
+  change it.
+- **The platform repo** answers "what infrastructure does it run on?" It holds
+  the Terraform, and platform engineers change it.
+- **The GitOps repo** answers "which version runs where, with what
+  settings?" CI may only update image digests in it; everything else is
+  platform engineers, with review for prod.
 
 App and platform code *can* share a repo while learning. The GitOps repo is
 the one I'd always keep separate: Argo CD watches it, its history is the
@@ -492,13 +496,16 @@ never both, or you're back to two owners.
 <details>
 <summary><b>Model answer</b></summary>
 
-Each answers one question, so each can change without touching the others:
+Each one answers a different question, so each can change without touching
+the others.
 
-| Piece | Question |
-|---|---|
-| `devcontainer.json` | What's the box? Base OS, system libraries, editor extensions |
-| `mise.toml` | Which tool versions inside it? |
-| DevPod | Where does the box run? |
+**Key points:**
+
+- **`devcontainer.json` is the box:** the base operating system, system
+  libraries and editor extensions.
+- **`mise.toml` is what's in the box:** the exact version of every tool.
+- **DevPod decides where the box runs:** my laptop today, a remote server
+  tomorrow.
 
 The payoff: moving from my laptop to a remote build server is **one flag**
 in DevPod (`--provider ssh`), with the box and the tools unchanged. And
@@ -725,23 +732,41 @@ reality gets fixed the same way.
 <details>
 <summary><b>Model answer</b></summary>
 
-First the four basics: its **entry point**, **dependency manager**, **build
-tool** and **final output**. Then eight operator questions, each answered by
-*doing*, not by reading the README:
+I don't trust the README for any of this. I run the app and read the code,
+because every answer becomes a setting in the Kubernetes manifests later.
 
-| Question | How I find out | What it decides later |
-|---|---|---|
-| How does a request flow? | Follow one CUJ step through the code | Network policy, tracing |
-| What does the health check check? | `curl` it, read the handler | Probe design |
-| Logs: structured, to the console? | Run it and look | Log collection |
-| Handles SIGTERM? | `time docker stop` | Grace period, `preStop` |
-| Config from env vars? | Search the code | ConfigMaps, Secrets |
-| Writes to local disk? | Run with a read-only filesystem | `readOnlyRootFilesystem`, `emptyDir` |
-| Startup time? | Measure it | Startup probe |
-| Memory under load? | `docker stats` during the CUJ | Requests and limits |
+**Key points:**
 
-Each answer goes into `docs/inventory.md`, because each one becomes a
-setting in Phase 6.
+- **The basics first.** Where does it start (entry point), how does it get
+  its libraries (dependency manager), how is it built (build tool), and what
+  comes out (binary, jar, static files)? That tells me what the Dockerfile
+  has to do.
+- **How a request flows.** I follow one real user request through the code:
+  which service it hits, what that service calls next. That becomes the
+  network policy allow-list, and it's where I'll look first when something
+  is slow.
+- **What the health check really checks.** I call it, then read its code. If
+  the liveness check tests the database, a database blip restarts every pod
+  at once, so liveness must only check the process itself.
+- **Where the logs go.** I run it and look: are they structured (JSON) and
+  written to the console, not to a file inside the container? Only console
+  logs get collected.
+- **How it stops.** I stop it *while a request is still running* and check
+  that the request finishes. If `docker stop` takes about 10 seconds, it
+  ignored the stop signal and got killed. This decides the grace period and
+  the `preStop` hook.
+- **Where its config comes from.** I search the code for every environment
+  variable it reads, so I know what goes in a ConfigMap and what's a secret.
+- **Whether it writes to disk.** I run it with a read-only filesystem and use
+  it. Whatever breaks shows me which folders need a small writable volume.
+- **How long it takes to start.** I time it. A slow starter needs a startup
+  probe, or Kubernetes kills it in a loop.
+- **How much memory it uses under load.** I watch `docker stats` while the
+  user journey runs. That number, not a guess, sets the memory request and
+  limit.
+
+All of it goes into `docs/inventory.md`, so whoever writes the manifests
+works from measurements.
 
 **In the Podinfo run:** entry point `cmd/podinfo/main.go`, Go modules,
 `go build` via the `Makefile`, one static binary.
