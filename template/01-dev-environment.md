@@ -271,11 +271,18 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
 
 ```yaml
 # .pre-commit-config.yaml
+default_install_hook_types: [pre-commit, commit-msg]   # plain `pre-commit install` sets up both
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
     hooks:
-      - id: gitleaks
+      - id: gitleaks-system     # runs the gitleaks pinned in mise.toml; `gitleaks` would download Go and build it
+        pass_filenames: false   # upstream gitleaks-system omits this; `gitleaks git --staged` takes no file args
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -298,7 +305,8 @@ repos:
 ```
 
 - [ ] `pre-commit install` runs automatically in `postCreateCommand`
-- [ ] **Prove it:** commit a file containing a fake AWS key (`AKIA` + 16 chars). The commit is **rejected**
+- [ ] **Prove it:** commit a file containing a fake AWS key (`AKIA` + 16 **random** chars; gitleaks ignores AWS's doc key `AKIAIOSFODNN7EXAMPLE`). The commit is **rejected, and the output says why**: the gitleaks hook `Failed` with `RuleID: aws-access-token`. A rejection from a crashed hook or a missing config doesn't count. Then a clean commit must **pass**
+- [ ] A commit message like `added stuff` is rejected by the commit-msg hook (proves the second hook type is installed)
 - [ ] Hooks run in under 5 seconds on a typical commit
 - [ ] `CONTRIBUTING.md` explains the hooks **and** that CI runs the same checks (P7), because `git commit --no-verify` skips hooks
 

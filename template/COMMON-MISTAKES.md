@@ -27,6 +27,7 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | Pre-commit hook as the only secret scanner (`--no-verify` skips it) | 07 plan | Gitleaks in CI too (P7-2) |
 | `mise install` passes on the host only because it borrows a host tool (`uv`/`pipx` for `pipx:` tools); a clean container fails | podinfo run | Pin the helper (`uv`) in `mise.toml`; the P1-3 clean-container run is the proof, not the host |
 | Docker-in-Docker dies in the dev container on an nftables-only host (NixOS): `can't initialize iptables table 'nat'` | podinfo run | `postStartCommand` switches to `iptables-nft` and starts dockerd (P1-3) |
+| Secret-leak drill judged by exit code only: hooks never installed (`--hook-types` isn't a flag), or "rejected" because the hook crashed; and AWS's doc key `AKIAIOSFODNN7EXAMPLE` is allowlisted by gitleaks | podinfo run | Random `AKIA` key; the output must show `RuleID: aws-access-token`; `gitleaks-system` + `default_install_hook_types` (P1-4) |
 | kubectl pinned from an example, not from the cluster: 4 minors off kind's default, and that EKS minor already in billed extended support | podinfo run | Choose the Kubernetes minor first; one ADR pins kubectl, the kind node image and EKS together (P1-2) |
 
 ## Images (P2)

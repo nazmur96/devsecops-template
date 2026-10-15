@@ -529,7 +529,8 @@ kind runs Kubernetes nodes as containers, so inside the box it needs
 docker-in-docker in **privileged** mode, which is fragile on rootless Podman.
 Options:
 
-1. Make docker-in-docker work (privileged, the right cgroup setup).
+1. Make docker-in-docker work (privileged, the right cgroup setup, and
+   `iptables-nft` on hosts without legacy iptables; see 8.5).
 2. Run kind from the **host's** Podman with
    `KIND_EXPERIMENTAL_PROVIDER=podman`, using the same `mise.toml` on the
    host (mise on the host is allowed; the tools still belong to the repo).
@@ -653,6 +654,27 @@ Scanners change too: a new version adds rules or changes defaults. Unpinned,
 the same commit could pass today and fail tomorrow, or pass on one machine
 and fail on another. Pinned (`rev:`), the checks are as reproducible as the
 tools, and upgrades happen in a PR.
+</details>
+
+<details>
+<summary><b>9.6</b> ★ "Your secret-leak drill was rejected. Is the hook working?"</summary>
+
+Not necessarily. **Read why it was rejected.** A commit can fail because
+the hook *crashed*: a missing config file, or pre-commit failing to download
+a toolchain. That looks exactly like "secret caught" if you only check the
+exit code. The opposite also happens: the drill passes because the hook
+never ran, for example after a wrong `pre-commit install` flag.
+
+A real pass needs three things: the output names **gitleaks** and a rule
+(`RuleID: aws-access-token`); a clean commit right after **succeeds**; and
+the fake key is **random**. Gitleaks deliberately ignores AWS's
+documentation key `AKIAIOSFODNN7EXAMPLE`, so a drill using it gets
+committed.
+
+**In the Podinfo run:** the first drill was rejected three times, every time
+for the wrong reason (an SSL error while pre-commit downloaded Go, and a
+branch without a config). The hooks had never been installed. RCA
+`platform/docs/rca/2026-10-15-p1-4-hook-drill-false-pass.md`.
 </details>
 
 ---
