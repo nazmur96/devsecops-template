@@ -1,7 +1,7 @@
 # Common mistakes: everything the reference projects got wrong
 
 One list, grouped by phase. Each line says which reference project did it, so
-you can see it in context (`../reference/NN-*.md`). **Read the section for a phase before you start that phase.** Rows marked `roadmap` come from the red flags and incident list of the *Cloud & Kubernetes Platform Engineering Roadmap* that this template was later checked against.
+you can see it in context (`../reference/NN-*.md`). **Read the section for a phase before you start that phase.** Rows marked `roadmap` come from the red flags and incident list of the *Cloud & Kubernetes Platform Engineering Roadmap* that this template was later checked against. Rows marked `podinfo run` come from running the template on Podinfo; the RCA is in that project's `platform/docs/rca/`.
 
 ## Planning (P0)
 
@@ -25,6 +25,9 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | Admin IAM user with static access keys for everything | 04, 05 | SSO roles (P5-1) |
 | Terraform state committed to Git (contains secrets) | 05, 06 | `.gitignore` on day one; S3 backend (P4-1) |
 | Pre-commit hook as the only secret scanner (`--no-verify` skips it) | 07 plan | Gitleaks in CI too (P7-2) |
+| `mise install` passes on the host only because it borrows a host tool (`uv`/`pipx` for `pipx:` tools); a clean container fails | podinfo run | Pin the helper (`uv`) in `mise.toml`; the P1-3 clean-container run is the proof, not the host |
+| Docker-in-Docker dies in the dev container on an nftables-only host (NixOS): `can't initialize iptables table 'nat'` | podinfo run | `postStartCommand` switches to `iptables-nft` and starts dockerd (P1-3) |
+| kubectl pinned from an example, not from the cluster: 4 minors off kind's default, and that EKS minor already in billed extended support | podinfo run | Choose the Kubernetes minor first; one ADR pins kubectl, the kind node image and EKS together (P1-2) |
 
 ## Images (P2)
 

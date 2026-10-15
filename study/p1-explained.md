@@ -326,7 +326,7 @@ you're in that folder.
 ```toml
 [tools]
 terraform = "1.9.8"
-kubectl   = "1.33.5"     # within one minor version of the cluster
+kubectl   = "1.36.5"     # the SAME minor as your cluster: choose that first
 helm      = "3.16.2"
 kind      = "0.27.0"
 awscli    = "2.22.0"
@@ -335,13 +335,15 @@ hadolint  = "2.12.0"
 gitleaks  = "8.21.2"
 cosign    = "2.4.1"
 syft      = "1.17.0"
+uv        = "0.13.1"     # needed by the two pipx: tools below
 "pipx:checkov"    = "3.2.300"
 "pipx:pre-commit" = "4.0.1"
 ```
 
 These are the template's **example** versions. Check current ones with
 `mise latest <tool>` and pin exact versions. (Podinfo's `platform/mise.toml`
-already pins the AWS CLI at `2.37.13`.)
+pins the AWS CLI at `2.38.1`, and kubectl at `1.36.5` to match the cluster,
+ADR-0010.)
 
 What each tool is for:
 

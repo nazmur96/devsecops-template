@@ -130,7 +130,7 @@ platform/
 ```hcl
 resource "aws_eks_cluster" "this" {
   name     = "sockshop-${var.env}"
-  version  = var.kubernetes_version          # the current EKS default, not an old pin
+  version  = var.kubernetes_version          # the minor chosen in P1-2 (same as kubectl + kind image); standard support only, never extended
   role_arn = aws_iam_role.cluster.arn
 
   access_config {

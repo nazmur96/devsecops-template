@@ -26,7 +26,7 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: sockshop
 nodes:
   - role: control-plane
-    image: kindest/node:v1.33.1@sha256:<digest>   # match your EKS minor version
+    image: kindest/node:v1.36.4@sha256:<digest>   # SAME minor as kubectl and EKS (P1-2 ADR); digest from the kind release notes
     extraPortMappings:
       - { containerPort: 80,  hostPort: 80 }
       - { containerPort: 443, hostPort: 443 }

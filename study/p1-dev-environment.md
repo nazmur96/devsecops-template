@@ -409,6 +409,43 @@ file (`.kube/config`, git-ignored, because it holds cluster credentials)
 makes the wrong cluster unreachable from here.
 </details>
 
+<details>
+<summary><b>6.5</b> ★ "<code>mise install</code> passes on your laptop and fails in a clean container. Which one is lying?"</summary>
+
+The laptop. Some mise backends need a helper: `pipx:` tools need `pipx` or
+`uv`. If the helper isn't in `mise.toml`, mise quietly uses whatever the
+host has, so the host passes because of something nobody pinned. The clean
+container has nothing extra and tells the truth.
+
+Pin the helper (`uv = "…"`) and treat the **clean-container run** as the
+proof, not the host run. The same rule catches every "works on my machine"
+leak: if a step only works because of something outside a committed file,
+that thing doesn't exist yet.
+
+**In the Podinfo run:** NixOS shipped `uv` system-wide; `pipx:checkov`
+failed in the P1-3 container until `uv` was pinned. RCA
+`platform/docs/rca/2026-10-15-p1-2-p1-3-devcontainer-on-nixos.md`.
+</details>
+
+<details>
+<summary><b>6.6</b> ★ "Which kubectl version do you pin?"</summary>
+
+The cluster's minor, so **choose the cluster version first**. kubectl is
+supported within one minor of the API server. Three things must agree: the
+kubectl pin, the local kind node image, and the EKS version. Decide them
+together in one ADR and bump them together in one PR.
+
+For EKS, pick the newest minor that is in **standard** support and that your
+add-ons (Karpenter, load balancer controller, policy engine, GitOps) have
+certified. Often that's newest-minus-one, because add-ons lag a brand-new
+minor. Never start on a minor in **extended** support: it's billed at about
+six times the normal control-plane rate.
+
+**In the Podinfo run:** kubectl 1.33 was copied from the template example.
+kind 0.33 created v1.37 clusters (four minors of skew), and EKS 1.33 was
+already in extended support. ADR-0010 set 1.36 for all three.
+</details>
+
 ### 7. "Two Go versions"
 
 > **Interviewer:** The dev container image ships Go 1.22, and `mise.toml`
@@ -520,6 +557,26 @@ module cache, the exact versions. In the container, it sees the same
 versions the build uses. On the host, it would need its own Go, which breaks
 the "nothing project-specific on the host" rule and brings back two owners.
 So the editor's *window* runs on the host, and its *brains* run in the box.
+</details>
+
+<details>
+<summary><b>8.5</b> ★ "The dev container builds on your colleague's laptop, but on yours dockerd won't start: <code>can't initialize iptables table 'nat'</code>. What's going on?"</summary>
+
+Docker programs the **host kernel's** firewall, even from inside a
+container, because a container has no kernel of its own. Linux has two
+firewall interfaces, legacy iptables and nftables. The docker-in-docker
+feature switches the container to **legacy**; a host that only has
+**nftables** (NixOS, and more distros every year) has no legacy `nat`
+table, so dockerd dies. Your colleague's kernel still has the legacy
+modules, so it works for them.
+
+Fix it in a committed file, not by hand: a `postStartCommand` that switches
+the container to `iptables-nft` and starts dockerd. It must run on every
+start, because the feature's installer resets the choice in the image.
+Then prove it: `docker info` and a `kind create cluster` inside the box.
+
+**In the Podinfo run:** RCA
+`platform/docs/rca/2026-10-15-p1-2-p1-3-devcontainer-on-nixos.md`.
 </details>
 
 ---

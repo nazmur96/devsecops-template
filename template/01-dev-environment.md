@@ -176,7 +176,7 @@ dist/
 # Example pins; check current versions with `mise latest <tool>` and pin exactly.
 [tools]
 terraform = "1.9.8"
-kubectl   = "1.33.5"     # keep within one minor version of the cluster
+kubectl   = "1.36.5"     # SAME minor as the cluster you'll run (kind P3-1, EKS P4-4); see the checklist
 helm      = "3.16.2"
 kind      = "0.27.0"
 awscli    = "2.22.0"
@@ -185,6 +185,7 @@ hadolint  = "2.12.0"
 gitleaks  = "8.21.2"
 cosign    = "2.4.1"
 syft      = "1.17.0"
+uv        = "0.13.1"     # pipx: tools install through uv; unpinned, mise silently borrows the host's uv/pipx
 "pipx:checkov" = "3.2.300"
 "pipx:pre-commit" = "4.0.1"
 
@@ -198,6 +199,8 @@ KUBECONFIG  = "{{config_root}}/.kube/config"   # per-repo kubeconfig; add .kube/
 - [ ] `mise doctor` clean; `which terraform` points into mise, not `/usr/bin`
 - [ ] Language runtimes (Go, Java, Node) are owned by **either** the devcontainer image **or** `mise.toml`. Write down which in the README
 - [ ] **No** tool from this list installed system-wide on the host
+- [ ] **Kubernetes version chosen before kubectl is pinned.** Take the newest EKS minor in *standard* support that your add-ons support (`aws eks describe-cluster-versions`; often newest-minus-one) and that kind ships a node image for. Write one ADR naming all three pins: kubectl here, the kind node image (P3-1) and EKS `kubernetes_version` (P4-4). They move together in one PR. Never start on a minor in *extended* support: about 6× the control-plane price. Don't copy the example pin above
+- [ ] A host `mise install` passing is **not** the proof: it can borrow host tools (`uv`, `pipx`, a system Python). P1-3's clean-container run is
 
 > **Nix-native alternative:** use `devenv.nix` instead. Pick this if you also want local **services** (Postgres, Redis) managed by the dev env, which mise can't do. Never use both in one repo.
 
@@ -223,7 +226,10 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin:/home/vscode/.local/share/mise/shims"
   },
-  "postCreateCommand": "curl -fsSL https://mise.run | sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && pre-commit install",
+  // every start: the DinD feature forces legacy iptables, which nftables-only hosts (NixOS) lack
+  "postStartCommand": "sudo update-alternatives --set iptables /usr/sbin/iptables-nft >/dev/null && sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-nft >/dev/null && (pgrep -x dockerd >/dev/null || sudo /usr/local/share/docker-init.sh true)",
+  // pre-commit install only once P1-4 has added its config
+  "postCreateCommand": "curl -fsSL https://mise.run | sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && if [ -f .pre-commit-config.yaml ]; then ~/.local/bin/mise exec -- pre-commit install; fi",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -241,6 +247,7 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
 
 - [ ] `devpod up . --provider docker` (Podman-backed) starts the workspace and opens the editor
 - [ ] Inside it: `terraform version`, `kubectl version --client`, `kind version` all match `mise.toml`
+- [ ] Inside it: `docker info` answers, and `kind create cluster` reaches `Ready` (then delete it). A container that starts but has no working dockerd is not done
 - [ ] Destroy and recreate (`devpod delete` → `devpod up`) gives the identical environment in under 10 minutes
 - [ ] Neovim users: `devpod up . --ide none` then `ssh <workspace>.devpod`
 
@@ -249,6 +256,12 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
 > run KinD from the host's Podman with `KIND_EXPERIMENTAL_PROVIDER=podman`,
 > using the **same `mise.toml`** on the host (mise is allowed on the host;
 > the tools stay per-repo). Record which you chose in an ADR.
+>
+> **nftables-only hosts (NixOS):** dockerd inside the box dies with
+> `can't initialize iptables table 'nat'`. Docker programs the *host*
+> kernel's firewall, and the DinD feature picks legacy iptables. The
+> `postStartCommand` above switches it to `iptables-nft`; keep it even if
+> your laptop doesn't need it, because the next machine might.
 
 ---
 
