@@ -155,6 +155,7 @@ CMD ["node", "server.js"]
 - [ ] `trivy image --severity HIGH,CRITICAL --ignore-unfixed <image>`: zero findings, or each one triaged
 - [ ] Every base image pinned by digest; no `latest` anywhere
 - [ ] **Every listener probed** with the image running: the main port, and any metrics, admin or gRPC port the app can open. Debug and admin endpoints (profilers, env dumps, crash or toggle routes) answer 404 on all of them. Watch for global registries: in Go, `net/http/pprof` registers on `http.DefaultServeMux`, so any server using the default mux serves the profiler (podinfo run)
+- [ ] **Read-only run with the image's own default arguments**: `docker run --read-only --cap-drop ALL --security-opt no-new-privileges <image>`, adding only the writable mounts your docs say the pod gets. Don't re-pass flags by hand: a flag typed in the test hides a mismatch between the image and the manifests (podinfo run: the image wrote to `/tmp/data` while every doc mounted `/data`)
 
 ---
 
