@@ -154,6 +154,7 @@ CMD ["node", "server.js"]
 - [ ] `hadolint` clean on every Dockerfile (or each ignore has a written reason)
 - [ ] `trivy image --severity HIGH,CRITICAL --ignore-unfixed <image>`: zero findings, or each one triaged
 - [ ] Every base image pinned by digest; no `latest` anywhere
+- [ ] **Every listener probed** with the image running: the main port, and any metrics, admin or gRPC port the app can open. Debug and admin endpoints (profilers, env dumps, crash or toggle routes) answer 404 on all of them. Watch for global registries: in Go, `net/http/pprof` registers on `http.DefaultServeMux`, so any server using the default mux serves the profiler (podinfo run)
 
 ---
 

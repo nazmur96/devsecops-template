@@ -14,7 +14,7 @@ production-grade platform on AWS EKS, one provable step at a time.**
 ![Tickets](https://img.shields.io/badge/tickets-143-informational)
 ![Cost P0–P3](https://img.shields.io/badge/cost_P0--P3-%240-success)
 
-[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md) · Explained simply: [Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md) · Interview cases: [Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md)
+[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md) · Explained simply: [Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md) · Interview cases: [Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md), [Phase 2](study/p2-containerise.md)
 
 </div>
 
@@ -417,7 +417,7 @@ says where the reference projects differ.
 3. **Copy each phase's tickets into your tracker** as you reach it. IDs like `P4-3` map straight onto a Jira key.
 4. **Write an ADR** whenever a ticket says *Decision* (template in [P0-8](template/00-inherit-and-plan.md#p0-8-start-the-adr-log)).
 5. **Keep evidence as you go:** screenshots and logs of every drill go into `docs/evidence/`, ready for [P11](template/11-present-it.md).
-6. **Read the plain-English walkthrough** ([Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md)), then **test yourself** with the phase's interview cases ([Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md)): mock-interview cases (a scenario, then the follow-ups an interviewer pushes with), each with a model answer. Add a follow-up whenever a run surprises you.
+6. **Read the plain-English walkthrough** ([Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md)), then **test yourself** with the phase's interview cases ([Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md), [Phase 2](study/p2-containerise.md)): mock-interview cases (a scenario, then the follow-ups an interviewer pushes with), each with a model answer. Add a follow-up whenever a run surprises you.
 
 ---
 
