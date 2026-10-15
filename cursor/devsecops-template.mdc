@@ -39,7 +39,9 @@ source, not from memory:**
    PR in **your own `git worktree`** (`git worktree add <dir> -b <branch>
    origin/<default>`), stage files **by name** (never `git add -A`), and check
    `git branch --show-current` right before committing. Worktrees share
-   branches: never delete a branch another worktree has checked out.
+   branches: never delete a branch another worktree has checked out. Never
+   run `devpod up` in a worktree (its `.git` is a pointer the container
+   can't follow); dev containers come from a normal clone.
 7. **The template is under test.** When a step is wrong or missing, say so,
    fix it in `~/orca/projects/devsecops` (commit + push to `main`), and add
    an RCA note in this project's `docs/rca/`.

@@ -1072,6 +1072,10 @@ halfway through, your next commit lands on *its* branch. If you then run
 - **Stage files by name** in shared folders, never `git add -A`.
 - **Check right before committing:** `git branch --show-current` and
   `git status`.
+- **Don't start a dev container from a worktree.** Its `.git` is only a
+  pointer file to the main repo's folder on the host, which the container
+  can't see, so anything needing Git in the box (`pre-commit install`)
+  fails. Worktrees are for commits; containers come from a normal clone.
 - Worktrees share branches: deleting a branch in one worktree deletes it
   everywhere.
 

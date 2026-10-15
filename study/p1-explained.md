@@ -877,6 +877,11 @@ git -C ../wt-mine add docs/x.md                        # stage by name, never `g
 git worktree remove ../wt-mine                          # clean up after the merge
 ```
 
+One catch: don't run `devpod up` in a worktree. Its `.git` is only a pointer
+to a folder on your laptop that the container can't see, so Git commands in
+the box fail. Worktrees are for commits; dev containers come from a normal
+clone.
+
 ## Common mistakes
 
 | Mistake | Why it hurts |
