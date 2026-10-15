@@ -34,6 +34,12 @@ source, not from memory:**
    anything is created. **Ask before any action that creates billed AWS
    resources, and before every `terraform apply`/`destroy`.** Destroy at the
    end of every session.
-6. **The template is under test.** When a step is wrong or missing, say so,
+6. **Git:** every change to the project repos goes branch → PR → squash-merge.
+   Claude may be working in the same checkouts at the same time, so build each
+   PR in **your own `git worktree`** (`git worktree add <dir> -b <branch>
+   origin/<default>`), stage files **by name** (never `git add -A`), and check
+   `git branch --show-current` right before committing. Worktrees share
+   branches: never delete a branch another worktree has checked out.
+7. **The template is under test.** When a step is wrong or missing, say so,
    fix it in `~/orca/projects/devsecops` (commit + push to `main`), and add
    an RCA note in this project's `docs/rca/`.

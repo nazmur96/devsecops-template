@@ -29,6 +29,8 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | Docker-in-Docker dies in the dev container on an nftables-only host (NixOS): `can't initialize iptables table 'nat'` | podinfo run | `postStartCommand` switches to `iptables-nft` and starts dockerd (P1-3) |
 | Secret-leak drill judged by exit code only: hooks never installed (`--hook-types` isn't a flag), or "rejected" because the hook crashed; and AWS's doc key `AKIAIOSFODNN7EXAMPLE` is allowlisted by gitleaks | podinfo run | Random `AKIA` key; the output must show `RuleID: aws-access-token`; `gitleaks-system` + `default_install_hook_types` (P1-4) |
 | SIGTERM judged by an idle stop: the app exits on time, but in-flight requests are cut when a shutdown timeout (started before a pre-drain sleep) runs out, and the process still exits 0 | podinfo run | Time the stop with a long request in flight; size the shutdown timeout and grace period from the longest request (P1-6, P6-7) |
+| Two agents (or a person and an agent) in one checkout: a branch switch sends the other's commit to the wrong branch, and `git add -A` sweeps in their unfinished files | podinfo run | A `git worktree` per worker; stage files by name |
+| `curl https://mise.run \| sh` unpinned: every rebuild installs whatever mise is newest | podinfo run | `MISE_VERSION=v… sh` in `postCreateCommand` (P1-3) |
 | kubectl pinned from an example, not from the cluster: 4 minors off kind's default, and that EKS minor already in billed extended support | podinfo run | Choose the Kubernetes minor first; one ADR pins kubectl, the kind node image and EKS together (P1-2) |
 
 ## Images (P2)

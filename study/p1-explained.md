@@ -6,9 +6,8 @@ Read it before you start the phase. Then test yourself with the
 
 Examples use the **Podinfo** run (fork
 [`nazmur96/podinfo`](https://github.com/nazmur96/podinfo), a small Go app).
-Phase 1 hadn't been run yet when this was written, so Podinfo details come
-from its code and the Phase 0 docs. Lines like *"for Podinfo, expect…"* are
-predictions to check, not results.
+Phase 1 has now been run on Podinfo: lines marked **"In the Podinfo run"** are
+what actually happened, with the measured numbers and the mistakes we hit.
 
 ---
 
@@ -216,6 +215,13 @@ Every repo gets a `README.md`, `.gitignore`, `.editorconfig`, `CODEOWNERS`,
 and branch protection on the default branch (PRs required, checks required,
 no force-push).
 
+> **In the Podinfo run:** GitHub refused branch protection: private repos on
+> a free plan can't have it (a free *organisation* can't either). So it's a
+> deferred ticket, to close before CI writes to the GitOps repo (P7). Until
+> then every change goes branch → PR → squash-merge by habit, and a local
+> hook (`no-commit-to-branch`) refuses commits on `main`. A habit isn't
+> enforcement: writing the gap down is what keeps it honest.
+
 ### What GitOps means
 
 Think of the cluster as a kitchen and **Argo CD** as the kitchen manager. The
@@ -373,6 +379,14 @@ which terraform       # must point into mise, NOT /usr/bin/terraform
 The `which` check catches a sneaky problem: the right version is installed,
 but your shell runs a different copy that was installed somewhere else.
 
+> **Trap: your laptop can lie.** Some tools need a helper to install: the
+> `pipx:` ones need `uv` or `pipx`. If the helper isn't pinned in `mise.toml`,
+> mise quietly borrows whatever your laptop has, and `mise install` passes.
+> A clean container has nothing to borrow, so it fails. **In the Podinfo
+> run** NixOS had `uv` installed, so the laptop passed and the container
+> failed until `uv` was pinned. Lesson: the clean container is the real test,
+> not your laptop.
+
 ### The `[env]` section
 
 ```toml
@@ -402,8 +416,9 @@ Pick one owner per runtime and write it in the README. Either:
 - the image provides the runtime, and mise handles only tools; or
 - the image is a plain OS, and mise provides the runtime too.
 
-> **For Podinfo, expect:** Go `1.27` (from `go.mod`). Decide whether the dev
-> container image or `mise.toml` provides it, and write that down.
+> **In the Podinfo run:** Go `1.27.0` (from `go.mod`) comes from **mise**;
+> the container image is plain Ubuntu with no Go. The README says so, and
+> inside the box `which go` points into mise.
 
 ### The alternative: `devenv.nix`
 
@@ -436,6 +451,18 @@ Because the jobs are separate, you can move the box (your laptop today, a
 remote server later) by changing one flag, without touching the other files.
 On your workstation, DevPod's `docker` provider is backed by **Podman**.
 
+Think of it as layers, each owned by one file:
+
+```
+your laptop (NixOS)          the editor window, Podman. Nothing project-specific
+└─ DevPod                    WHERE the box runs (local, or a server over ssh)
+   └─ the box                OS + system libs + Docker-in-Docker   ← devcontainer.json
+      └─ the tools           go, terraform, kubectl… exact versions ← mise.toml
+         └─ the Git hooks    checks on every commit                ← .pre-commit-config.yaml
+```
+
+Change one layer and the ones above it don't notice.
+
 ### The example `devcontainer.json`, line by line
 
 ```jsonc
@@ -448,25 +475,34 @@ On your workstation, DevPod's `docker` provider is backed by **Podman**.
   "remoteEnv": {
     "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin:/home/vscode/.local/share/mise/shims"
   },                                                                   // so the shell finds mise's tools
-  "postCreateCommand": "curl -fsSL https://mise.run | sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && pre-commit install"
+  "postStartCommand": "…switch to iptables-nft, start dockerd…",       // runs on EVERY start (see the trap below)
+  "postCreateCommand": "curl -fsSL https://mise.run | MISE_VERSION=v2026.10.9 sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && if [ -f .pre-commit-config.yaml ]; then ~/.local/bin/mise exec -- pre-commit install; fi"
 }
 ```
 
 Why a container engine *inside* the container? To run `docker build` and
 **kind**, which runs Kubernetes nodes as containers.
 
-`postCreateCommand` runs once, after the box is created. Read the `&&` as
-"and then, only if that worked":
+There are two hooks, and the difference matters:
+
+- **`postCreateCommand` runs once**, when the box is first built. Use it
+  for installs.
+- **`postStartCommand` runs on every start.** Use it for anything that must
+  be true each time the box comes up.
+
+Read the `&&` in `postCreateCommand` as "and then, only if that worked":
 
 ```mermaid
 flowchart LR
-    A[Box created] --> B[Install mise] --> C[Trust this repo's mise.toml] --> D[Install the pinned tools] --> E[Install the Git hooks]
+    A[Box created] --> B[Install mise, pinned version] --> C[Trust this repo's mise.toml] --> D[Install the pinned tools] --> E[Install the Git hooks, if configured]
 ```
 
-Two things to stay aware of:
+Things to stay aware of:
 
 - `curl … | sh` downloads a script and runs it straight away. That's a trust
-  decision; a company may require an approved installer instead.
+  decision; a company may require an approved installer instead. Without
+  `MISE_VERSION`, it also installs *whatever is newest today*: **in the
+  Podinfo run** the box got mise 2026.10.9 while the laptop had 2026.8.6.
 - `mise trust` lets that repo's config run. Fine for your own repo; read a
   stranger's config before trusting it.
 
@@ -492,6 +528,14 @@ back" is. Neovim users: `devpod up . --ide none`, then
 > `KIND_EXPERIMENTAL_PROVIDER=podman kind create cluster`, using the **same
 > `mise.toml`** on the host (mise on the host is allowed; the tools still
 > belong to the repo). Pick one, test it, record it in an ADR.
+
+> **Trap on NixOS (nftables-only hosts):** Docker inside the box died with
+> `can't initialize iptables table 'nat'`. A container has no kernel of its
+> own, so Docker programs your *laptop's* firewall, and the Docker-in-Docker
+> add-on picks the old firewall interface (legacy iptables) that NixOS
+> doesn't have. The `postStartCommand` switches it to the new one
+> (`iptables-nft`) and starts Docker. It's in `postStartCommand`, not
+> `postCreateCommand`, because the add-on resets the choice every time.
 
 A container isn't automatically secure. Privileged mode, docker-in-docker and
 access to the container engine are all real permissions. Know what you've
@@ -519,21 +563,35 @@ may already be copied, so you must assume it's leaked and rotate it.
 | trailing-whitespace, end-of-file-fixer | Messy whitespace (fixed for you) |
 | **hadolint** | Dockerfile mistakes |
 | terraform_fmt, terraform_validate | Unformatted or invalid Terraform |
+| conventional-pre-commit | Commit messages that don't follow `type: summary` (runs on the *message*, not the files) |
+| no-commit-to-branch | Commits made directly on `main` |
 
 They're listed in `.pre-commit-config.yaml`. The shape is simple: `repos`
 says where each check comes from, `rev` **pins its version** (scanners change
 too), and `hooks` picks which checks to run. `pre-commit install` (already in
-`postCreateCommand`) wires it into Git.
+`postCreateCommand`) wires it into Git. Put
+`default_install_hook_types: [pre-commit, commit-msg]` at the top of the
+config, so that one plain `pre-commit install` sets up both the file checks
+and the message check.
+
+Use the hook `gitleaks-system`, which runs the gitleaks that mise pinned. The
+plain `gitleaks` hook downloads Go and builds gitleaks from source on first
+use; **in the Podinfo run** that download failed on the NixOS laptop.
 
 ### Prove it works, don't assume it
 
 1. Create a throwaway file containing a **fake** AWS key: `AKIA` followed by
-   16 characters. Never use a real one.
+   16 **random** characters. Never a real key, and not AWS's documentation
+   key `AKIAIOSFODNN7EXAMPLE`: gitleaks deliberately ignores that one.
 2. Try to commit it.
-3. The commit must be **rejected**.
-4. Delete the file and check `git status` is clean.
+3. The commit must be **rejected, and the output must say why**: the
+   gitleaks hook `Failed`, with `RuleID: aws-access-token`.
+4. Remove the file, make a normal commit, and check that it **passes**.
 
-A config file can exist and still not work. Only the failed commit proves it.
+A config file can exist and still not work. And a rejection can be a
+*crash*, not a catch: **in the Podinfo run** the first drill was rejected
+three times for the wrong reasons (a failed download, a missing config) while
+the hooks weren't even installed. Read the output, not just the result.
 
 The hooks must also be **fast**: under 5 seconds on a normal commit, or
 people start skipping them.
@@ -575,9 +633,25 @@ So, before containerising anything:
   when a user does something real.
 - Wherever the README was wrong, **fix the README** (a PR to the developers).
 
-> **For Podinfo, expect:** `make run` (which wraps `go run cmd/podinfo/*`),
-> listening on port 9898, then the CUJ steps from `platform/docs/cuj.md`
-> against `http://localhost:9898`.
+> **In the Podinfo run:** upstream's README has no local-run section, but its
+> `Makefile` does: `make run`, inside the app's dev container (`make` isn't
+> on the laptop, by design). Port 9898, and CUJ steps 1–6 from
+> `platform/docs/cuj.md` all passed. The app README now documents it.
+
+### How does a program know its own version?
+
+The compiled program can't look at Git. The build has to **write the commit
+into it**, in Go with a linker flag (`-ldflags "-X …REVISION=<sha>"`), in a
+Dockerfile with a build argument. Nothing written means `unknown`.
+
+| How it was built | What `/version` says |
+|---|---|
+| `go run ./cmd/podinfo` | `unknown` |
+| `make run` | `6.15.0-11-g6f667bcd` (`git describe`: the short SHA is inside) |
+| CI, from P7 | must be the **full commit SHA**, passed as `--build-arg REVISION` |
+
+Why care: "which code is running right now?" is the first question in every
+incident and rollback. An image that can't answer it leaves you guessing.
 
 ---
 
@@ -631,8 +705,9 @@ is still down → restart again, and again. A database problem has become a
 restart storm. **Liveness must never check the database.** Readiness *may*
 check a dependency the app truly can't work without.
 
-> **For Podinfo, expect:** `/healthz` and `/readyz` are simple in-memory
-> flags that check no dependencies, which is right for liveness.
+> **In the Podinfo run:** confirmed. `/healthz` and `/readyz` are simple
+> in-memory flags that check no dependencies, which is right for liveness.
+> Both switch to failing the moment SIGTERM arrives.
 
 ### 3. Logs
 
@@ -651,7 +726,7 @@ field:
 {"level":"error","service":"checkout","msg":"payment request failed"}
 ```
 
-> **For Podinfo, check:** it logs JSON, but to **stderr**, not stdout
+> **In the Podinfo run:** it logs JSON, but to **stderr**, not stdout
 > (`cmd/podinfo/main.go`, `OutputPaths: stderr`). Collectors read both, so
 > that's fine, but write down which one. Its logger also **samples**: after
 > 100 identical messages in a second, it keeps only every 100th. Remember
@@ -671,12 +746,26 @@ flowchart TD
 
 The quick test: `time docker stop <container>`. Docker waits 10 seconds
 before forcing it. **If stop takes about 10 seconds, the app ignored SIGTERM
-and was killed.** A fast stop is a good sign. Then read its logs to confirm it
-drained properly.
+and was killed.** A fast stop is a good sign, but only half the test.
 
-> **For Podinfo, expect:** a fast, clean stop. It marks itself unready, waits
-> 3 seconds, then shuts down (see Phase 0: that wait is skipped at debug log
-> level).
+The other half: stop it **while a slow request is still running**, and check
+that request finishes. An idle stop can't show whether the app gives
+in-flight work enough time.
+
+> **In the Podinfo run:** an idle stop took 3 seconds: it marks itself
+> unready, waits 3 s for the load balancer to notice, then shuts down. Looks
+> perfect. But its 5-second shutdown timer **starts at SIGTERM, before that
+> wait**, so in-flight requests only get about **2 seconds**:
+>
+> ```
+> 0 s ── SIGTERM: timer starts, app marks itself unready
+> 3 s ── wait over: stop taking new connections, finish open ones
+> 5 s ── timer runs out: any request still open is cut off
+> ```
+>
+> A request needing 6.5 s more was cut at 5.0 s, **and the app still exited
+> with code 0**, so nothing looked wrong. (At debug log level the 3 s wait is
+> skipped entirely, which is why `make run` isn't how you test draining.)
 
 ### 5. Config from environment variables
 
@@ -693,15 +782,17 @@ wrote is gone. For security we'll also make the filesystem **read-only**
 and see what breaks. Any folder it truly needs gets a small temporary volume
 (`emptyDir`).
 
-> **For Podinfo, expect:** it writes to `/data` (the `/store` endpoint,
-> `--data-path`), so it needs an `emptyDir` there.
+> **In the Podinfo run:** `/store` writes to `/data` (`--data-path`), so it
+> needs an `emptyDir` there. That's half the answer: the read-only run that
+> proves *nothing else* writes needs a container, so it moved to P2-4.
 
 ### 7. Startup time
 
 If a probe expects an answer before the app is ready, Kubernetes thinks the
 app is broken and kills it, over and over: a crash loop that looks like an
 app bug. Measure startup, and add a startup probe if it's slow. (Big Java apps
-can take a minute or more; Podinfo starts in about a second.)
+can take a minute or more; **Podinfo measured 50–100 ms**, so no startup
+probe.)
 
 ### 8. Memory under load
 
@@ -709,6 +800,10 @@ Run the CUJ and watch `docker stats`. Too low a memory limit later means the
 app gets killed (OOMKilled); too low a request means Kubernetes packs too much
 onto one node. Measure, don't guess. (Java needs extra care: the JVM must be
 told how much of the container's memory it may use.)
+
+> **In the Podinfo run:** 38 MiB idle, 42 MiB after the CUJ. The upstream
+> Helm chart asks for only 16 Mi, less than the app uses doing nothing. Real
+> load testing comes in P2-9.
 
 ---
 
@@ -764,6 +859,24 @@ they come in **P3-9**:
 2. **A fake secret is rejected** at commit time.
 3. **`docs/inventory.md` answers all eight questions** for every service.
 
+**In the Podinfo run** all three passed from a fresh clone, in a brand-new
+workspace, with no manual step.
+
+## Working alongside an AI agent
+
+A repo folder has **one current branch and one staging area**, shared by
+everyone working in it. When two agents (or you and an agent) use the same
+folder, one switching branches redirects the other's next commit. **In the
+Podinfo run** that put a commit, plus someone else's unfinished files, on
+the wrong branch. The fix is `git worktree`: a second folder on the same
+repository, with its own branch.
+
+```bash
+git worktree add ../wt-mine -b my-branch origin/main   # my own folder and branch
+git -C ../wt-mine add docs/x.md                        # stage by name, never `git add -A`
+git worktree remove ../wt-mine                          # clean up after the merge
+```
+
 ## Common mistakes
 
 | Mistake | Why it hurts |
@@ -773,6 +886,11 @@ they come in **P3-9**:
 | `*.tfstate` missing from `.gitignore` | State holds passwords in plain text |
 | Skipping the local run | You debug app bugs inside Kubernetes, the hardest place to do it |
 | Pre-commit as the only secret scanner | `--no-verify` skips it; CI must check again |
+| Trusting the laptop's `mise install` | It can borrow unpinned tools; the clean container is the test |
+| Judging a drill by "it failed" | A crash looks like a catch; read the reason |
+| Testing SIGTERM only when idle | In-flight requests can still be cut, with exit code 0 |
+| Pinning kubectl from an example | It must match the cluster's version; choose that first |
+| Two agents in one checkout | Commits land on the wrong branch; use a worktree each |
 
 ## What to remember
 

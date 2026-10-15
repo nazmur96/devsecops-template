@@ -209,6 +209,32 @@ people approve. Find out which rule blocks it from the PR's checks panel; don't
 look for a way around it.
 </details>
 
+<details>
+<summary><b>3.3 ★</b> "Your repo is private on a free GitHub plan, and GitHub won't let you protect <code>main</code>. What now?"</summary>
+
+First be clear what protection *does*: GitHub itself refuses a direct push
+to `main`, a force-push that rewrites history, and a merge before checks
+pass. A team habit of "always open a PR" gives the same history, but nothing
+**enforces** it: one tired `git push origin main` goes straight through.
+
+**Key points:**
+
+- **Name the gap, don't hide it.** Record it as a deferred ticket with the
+  date it must be closed. Here that's before CI starts writing to the
+  GitOps repo, because that's when an unprotected branch becomes a real risk.
+- **Add a cheap local guard meanwhile.** The pre-commit hook
+  `no-commit-to-branch` refuses commits on `main` on your machine. It only
+  stops accidents, and `--no-verify` skips it.
+- **Know the real fixes.** A paid plan (Pro for a personal account, Team for
+  an org), or a public repo. A *free* organisation doesn't help: it has the
+  same limit on private repos.
+
+**In the Podinfo run:** both branch protection and rulesets returned
+"Upgrade to GitHub Pro or make this repository public". Protection is
+deferred to P7-1b (backlog P1-1b); every change since P1-2 went through a
+squash PR, and `no-commit-to-branch` is installed in all three repos.
+</details>
+
 ---
 
 ## P1-1 — Repository layout
@@ -470,8 +496,10 @@ repo, same file works on a host), or the image provides Go and mise handles
 only tools (good when the image is shared across many repos). Both work; two
 owners never does.
 
-**In the Podinfo run:** `go.mod` says Go `1.27`. The owner gets decided and
-written down in P1-2.
+**In the Podinfo run:** `go.mod` says Go `1.27.0`. **mise owns Go**
+(`go = "1.27.0"` in the app's `mise.toml`), and the dev container image is a
+plain Ubuntu with no Go of its own. The app README says so. Inside the box,
+`which go` points to `~/.local/share/mise/shims/go`: one owner, provably.
 </details>
 
 **Follow-ups**
@@ -513,6 +541,18 @@ in DevPod (`--provider ssh`), with the box and the tools unchanged. And
 `mise.toml` works on a host too, so the same pins serve the container, a
 plain laptop and CI.
 
+How the layers stack, and which file owns each one:
+
+```
+your laptop (NixOS)          owns: the editor window, Podman. Nothing project-specific
+└─ DevPod                    owns: WHERE the box runs (local Podman, or ssh to a server)
+   └─ the box                owns: OS + system libs + Docker-in-Docker   ← devcontainer.json
+      └─ the tools           owns: go, terraform, kubectl… exact versions ← mise.toml
+         └─ the Git hooks    owns: checks on every commit                ← .pre-commit-config.yaml
+```
+
+Change one layer, and the layers above it don't notice.
+
 **Weak answer:** "The tutorial used them." Or mixing the jobs up, like
 installing tool versions in the Dockerfile and in mise.
 </details>
@@ -528,6 +568,14 @@ approved installer, a pinned and checksummed download, or bake the tool into
 a reviewed base image. The same goes for `mise trust`: fine for my own repo,
 but I'd read a stranger's config before trusting it, because it can run
 commands.
+
+There's a quieter problem too: the script installs **whatever mise version
+is newest today**, so two rebuilds a month apart get different versions.
+Pin it: `curl -fsSL https://mise.run | MISE_VERSION=v2026.10.9 sh`.
+
+**In the Podinfo run:** the containers got mise 2026.10.9 while the host had
+2026.8.6, from the same unpinned line. The devcontainers now pin
+`MISE_VERSION`.
 </details>
 
 <details>
@@ -582,6 +630,9 @@ modules, so it works for them.
 Fix it in a committed file, not by hand: a `postStartCommand` that switches
 the container to `iptables-nft` and starts dockerd. It must run on every
 start, because the feature's installer resets the choice in the image.
+(The difference that matters: `postCreateCommand` runs **once**, when the
+box is first built, so it's for installs. `postStartCommand` runs on **every
+start**, so it's for anything that must be true each time the box comes up.)
 Then prove it: `docker info` and a `kind create cluster` inside the box.
 
 **In the Podinfo run:** RCA
@@ -620,11 +671,13 @@ In layers, because each one can fail:
 <details>
 <summary><b>9.1</b> "How do you know the hook actually works?"</summary>
 
-Try to break it. Commit a throwaway file with a **fake** AWS key (`AKIA`
-plus 16 characters), and the commit must be **rejected**. Then delete the
-file and confirm `git status` is clean. A config file proves nothing on its
+Try to break it. Commit a throwaway file with a **fake** AWS key: `AKIA`
+plus 16 **random** characters. The commit must be **rejected, and the
+output must say why**: the secret scanner failed and names the rule. Then
+make a clean commit, which must pass. A config file proves nothing on its
 own: the hook might not be installed, or the rule might not match. Only a
-blocked commit proves it.
+commit blocked *for the right reason* proves it. See 9.6 for how this drill
+fooled us twice.
 </details>
 
 <details>
@@ -720,6 +773,33 @@ next person doesn't lose an hour. Every step where the README didn't match
 reality gets fixed the same way.
 </details>
 
+<details>
+<summary><b>10.2 ★</b> "<code>/version</code> says <code>commit: unknown</code>. How does a binary know its own version, and why care?"</summary>
+
+The compiled program can't look at Git. Someone has to **write the commit
+into it at build time**. In Go that's a linker flag,
+`-ldflags "-X <package>.REVISION=<sha>"`; in a Dockerfile it arrives as a
+build argument. Nothing passed means the default: `unknown`.
+
+It matters because "which code is running?" is the first question in every
+incident and every rollback. If the running image can't answer it, you're
+guessing.
+
+**Key points:**
+
+- **Local runs differ by method.** A plain `go run` stamps nothing, so you
+  get `unknown`. The project's own `make run` stamps a `git describe` string.
+- **CI must stamp the full SHA**, the same commit it built from, or a check
+  like "the running version equals the commit we built" can never pass.
+- **Labels aren't enough.** An OCI label on the image (`image.revision`) is
+  for registries and scanners; the app can't read it. You need both.
+
+**In the Podinfo run:** `make run` gave `commit: 6.15.0-11-g6f667bcd`
+(`git describe`, short SHA inside). The Dockerfile takes
+`--build-arg REVISION`, so CI must pass the full SHA in P7-3
+(platform `docs/cuj.md`, step 1).
+</details>
+
 ---
 
 ## P1-6 — Understand it as an operator
@@ -770,7 +850,11 @@ All of it goes into `docs/inventory.md`, so whoever writes the manifests
 works from measurements.
 
 **In the Podinfo run:** entry point `cmd/podinfo/main.go`, Go modules,
-`go build` via the `Makefile`, one static binary.
+`go build` via the `Makefile`, one static binary. Measured: ready in about
+**50–100 ms**; memory **38 MiB idle, 42 MiB** after the CUJ (the upstream
+chart requests only 16 Mi, below idle); stops **3 s** after SIGTERM, but
+in-flight requests only get **~2 s** (11.6); health checks test nothing
+external; logs are JSON on **stderr** (11.2). Platform `docs/inventory.md`.
 
 **Weak answer:** "The port and the image name."
 </details>
@@ -812,8 +896,10 @@ the error. Then give it exactly those paths as small writable volumes
 (`--tmpfs /tmp` locally, `emptyDir` in Kubernetes) and decide whether any of
 that data matters if the pod dies.
 
-**In the Podinfo run:** expect `/data` (the `/store` endpoint,
-`--data-path`).
+**In the Podinfo run:** running the binary showed `/store` writes under
+`--data-path` (`/data` by default). That's only half the answer: it doesn't
+prove *nothing else* writes, say to `/tmp`. Only the read-only run proves
+that, and it needs a container, so it moved to P2-4.
 </details>
 
 <details>
@@ -960,4 +1046,38 @@ Three checks, each by doing rather than reading:
 
 If any of those needs "oh, and you also have to…", that step isn't in a
 committed file yet, so it doesn't exist.
+
+**In the Podinfo run:** a fresh clone of the app (`a6b1396`) into a new
+DevPod workspace: tools from mise, hooks installed by the container setup,
+CUJ steps 1–6 via `make run`, a random `AKIA…` key rejected with
+`RuleID: aws-access-token`, and a clean commit passing, with no manual step.
+</details>
+
+**Follow-ups**
+
+<details>
+<summary><b>14.1 ★</b> "You and an AI coding agent work in the same repo checkout at the same time. What can go wrong?"</summary>
+
+A checkout has **one current branch and one staging area**, shared by
+everyone using that folder. If the agent switches branches while you're
+halfway through, your next commit lands on *its* branch. If you then run
+`git add -A`, you also commit *its* unfinished files.
+
+**Key points:**
+
+- **Give each worker its own working folder.**
+  `git worktree add ../wt-mine -b my-branch origin/main` creates a second
+  folder on the same repository, with its own branch and staging area. No
+  second clone needed.
+- **Stage files by name** in shared folders, never `git add -A`.
+- **Check right before committing:** `git branch --show-current` and
+  `git status`.
+- Worktrees share branches: deleting a branch in one worktree deletes it
+  everywhere.
+
+**In the Podinfo run:** a branch switch by the other agent, between our
+`git switch -c` and `git commit`, put an ADR commit on its P1-4 branch,
+together with its unfinished files, and that mixed commit got pushed. It was
+untangled without losing work. Since then each agent builds its PRs in its
+own worktree.
 </details>

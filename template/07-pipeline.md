@@ -149,6 +149,7 @@ jobs:
       - name: Build once, keep it local
         run: |
           docker build \
+            --build-arg REVISION=$GITHUB_SHA \
             --label org.opencontainers.image.revision=$GITHUB_SHA \
             --label org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY \
             -t ci/$SERVICE:$GITHUB_SHA services/$SERVICE
@@ -187,6 +188,7 @@ jobs:
 - [ ] Trivy and the size budget run on the **local** image; nothing vulnerable reaches ECR (references 01/05 pushed first)
 - [ ] Tags: `<git-sha>` (and `v<semver>` on releases). **No `latest`, ever** (references 04/06 pushed `latest`)
 - [ ] The **digest** (`…@sha256:…`) is the deployable identity from here on
+- [ ] The app itself knows the commit: the full SHA goes in as a **build argument** (here `REVISION`; use whatever the app's Dockerfile reads), and the CUJ's version step returns it. The OCI label is for registries and scanners; the running app can't read it. Without the build arg, `/version` says `unknown` (podinfo run)
 - [ ] **[OPT]** SLSA build provenance with `actions/attest-build-provenance`
 - [ ] **Prove it:** `cosign verify $IMAGE --certificate-identity-regexp 'https://github.com/<org>/sockshop/.github/workflows/release.yml@.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com` succeeds; `cosign verify-attestation --type cyclonedx …` shows the SBOM
 

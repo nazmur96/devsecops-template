@@ -229,7 +229,7 @@ defines **tool versions** inside it; **DevPod** decides **where** it runs
   // every start: the DinD feature forces legacy iptables, which nftables-only hosts (NixOS) lack
   "postStartCommand": "sudo update-alternatives --set iptables /usr/sbin/iptables-nft >/dev/null && sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-nft >/dev/null && (pgrep -x dockerd >/dev/null || sudo /usr/local/share/docker-init.sh true)",
   // pre-commit install only once P1-4 has added its config
-  "postCreateCommand": "curl -fsSL https://mise.run | sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && if [ -f .pre-commit-config.yaml ]; then ~/.local/bin/mise exec -- pre-commit install; fi",
+  "postCreateCommand": "curl -fsSL https://mise.run | MISE_VERSION=v2026.10.9 sh && ~/.local/bin/mise trust && ~/.local/bin/mise install && if [ -f .pre-commit-config.yaml ]; then ~/.local/bin/mise exec -- pre-commit install; fi",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -342,7 +342,7 @@ For each service, answer and record in `docs/inventory.md`:
 |---|---|---|
 | How does a request flow? | Follow one CUJ step through the code | NetworkPolicy allow-list (P8), tracing (P10) |
 | Health endpoint? Does it check dependencies? | `curl :port/health`; read the handler | Probe design (P6): **liveness must not check the DB** |
-| Logs to stdout as structured lines? | Run it and look | Log pipeline (P10) |
+| Logs to the console (stdout **or** stderr: note which) as structured lines? Sampled? | Run it and look; read the logger config | Log pipeline (P10); sampling makes log counts undercount |
 | Handles SIGTERM? | `time docker stop <c>`: ~10 s means it ignored SIGTERM and got SIGKILLed. Then again **with a long request in flight**: does it finish, and is it cut when the shutdown timeout ends? Read *when* that timeout starts (a pre-drain sleep may eat it), and don't trust exit 0 | `preStop`, grace period, `--shutdown-timeout` (P6) |
 | Config via env vars? | grep | 12-factor; ConfigMaps/Secrets (P5) |
 | Writes to local disk? | Run with a read-only filesystem | `readOnlyRootFilesystem` + `emptyDir` (P6) |
