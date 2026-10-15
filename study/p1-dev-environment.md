@@ -811,6 +811,25 @@ limit above the real peak, and set the JVM's percentage so heap plus
 everything else fits. Otherwise the container gets OOMKilled.
 </details>
 
+<details>
+<summary><b>11.6</b> ★ "The app stops 3 seconds after SIGTERM and exits 0. So shutdown is graceful, right?"</summary>
+
+You've only proven it handles the signal **when idle**. Graceful means
+in-flight requests finish. Check *when the shutdown timeout starts*: if
+the clock starts at the signal and the app then sleeps to let the load
+balancer catch up, the sleep eats the drain budget. Test it with a request
+in flight that takes longer than the budget left after the sleep.
+
+Also don't trust the exit code: many servers log "shutdown failed:
+deadline exceeded" and still exit 0, so a cut request looks like a clean
+stop to every restart metric.
+
+**In the Podinfo run:** 5 s timeout created at SIGTERM, then a 3 s sleep,
+so ~2 s for in-flight work. A request needing 6.5 s after the signal was
+cut at 5.0 s, and the process exited 0 (`pkg/signals/shutdown.go:43,61`;
+platform `docs/inventory.md`, P1-6).
+</details>
+
 ---
 
 ## P1-7 — Linux fundamentals (optional)

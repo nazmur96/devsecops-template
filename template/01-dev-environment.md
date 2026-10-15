@@ -343,7 +343,7 @@ For each service, answer and record in `docs/inventory.md`:
 | How does a request flow? | Follow one CUJ step through the code | NetworkPolicy allow-list (P8), tracing (P10) |
 | Health endpoint? Does it check dependencies? | `curl :port/health`; read the handler | Probe design (P6): **liveness must not check the DB** |
 | Logs to stdout as structured lines? | Run it and look | Log pipeline (P10) |
-| Handles SIGTERM? | `time docker stop <c>`: ~10 s means it ignored SIGTERM and got SIGKILLed | `preStop`, grace period (P6) |
+| Handles SIGTERM? | `time docker stop <c>`: ~10 s means it ignored SIGTERM and got SIGKILLed. Then again **with a long request in flight**: does it finish, and is it cut when the shutdown timeout ends? Read *when* that timeout starts (a pre-drain sleep may eat it), and don't trust exit 0 | `preStop`, grace period, `--shutdown-timeout` (P6) |
 | Config via env vars? | grep | 12-factor; ConfigMaps/Secrets (P5) |
 | Writes to local disk? | Run with a read-only filesystem | `readOnlyRootFilesystem` + `emptyDir` (P6) |
 | Startup time? | Measure | `startupProbe` (P6) |
