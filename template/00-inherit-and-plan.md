@@ -542,7 +542,7 @@ edge, and what you leave out is the real decision.**
 
 ## Prove it
 
-- [ ] A person who hasn't seen the project can read `docs/` in 20 minutes and explain: what the app does, what you'll build first, what it costs, and the top 3 risks
+- [ ] A person who hasn't seen the project can read `docs/` in 20 minutes and explain: what the app does, what you'll build first, what it costs, and the top 3 risks. Give them a one-page `docs/README.md` that answers those four, each linked to its source: a full `docs/` is far more than 20 minutes of reading
 - [ ] Every later-phase decision you make links back to an ADR or a requirement here
 
 ## Common mistakes
