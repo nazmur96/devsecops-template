@@ -23,8 +23,9 @@ stories.
 
 **Adding a question:** add a follow-up under the case it belongs to (next
 number, e.g. `6.4`), or a new case at the end of its section's numbering.
-Phrase it as something an interviewer would say, give the model answer, and
-cite the file/line, ADR or RCA that proves it. Never renumber existing cases
+Phrase it as something an interviewer would say. Write the model answer
+the way you would say it out loud: short paragraphs or **Key points:** bullets,
+never a table. Cite the file/line, ADR or RCA that proves it. Never renumber existing cases
 or follow-ups: references like "study P1 6.2" must stay valid.
 
 ---
