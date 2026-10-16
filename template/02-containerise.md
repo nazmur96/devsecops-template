@@ -30,7 +30,7 @@ Dockerfiles and deployment files first. Writing them yourself is the lesson.
 | User | Non-root, **numeric** UID (`USER 10001`) | `docker inspect -f '{{.Config.User}}'` not empty / not `root` |
 | Base images | Pinned **by digest** (`image:tag@sha256:…`) | hadolint DL3006/DL3007; grep for `@sha256` |
 | Packages | Versions pinned (`apk add tini=0.19.0-r3`) | hadolint DL3018 (reference 01's pipeline caught this) |
-| Process | Exec-form `ENTRYPOINT`/`CMD`, app is PID 1 or under `tini`; **not `npm start`** | `time docker stop` < 2 s |
+| Process | Exec-form `ENTRYPOINT`/`CMD`, app is PID 1 or under `tini`; **not `npm start`** | `docker stop` exits **0** (not 137) well before the 10 s SIGKILL. About a second for apps with no drain; an app that drains on purpose (podinfo: 3 s) takes that long plus a little, and the drain is written down |
 | Port | ≥ 1024 inside the container where the app allows it | See the port-80 trap below |
 | Secrets | Never in `ENV`, `ARG` or a `COPY`'d file; BuildKit `--mount=type=secret` if a build needs one | `docker history --no-trunc`, `dive` |
 | Labels | `org.opencontainers.image.source`, `.revision`, `.created` | `docker inspect` |
@@ -138,7 +138,7 @@ CMD ["node", "server.js"]
 
 - [ ] Production dependencies only; image < 150 MB
 - [ ] Backend URLs come from env vars, not baked in
-- [ ] `time docker stop` returns in about a second (SIGTERM handled)
+- [ ] `docker stop` exits 0 (SIGTERM handled, not SIGKILLed after 10 s): about a second, or the app's documented drain time
 
 > Reference 04 used a **single-stage** Node image (build tools shipped to prod)
 > and `CMD ["npm", "start"]`. Both are fixed above.
@@ -165,14 +165,18 @@ CMD ["node", "server.js"]
 
 ```bash
 #!/usr/bin/env bash
-# scripts/check-image-size.sh <image> <max-MB>
+# scripts/check-image-size.sh <image> <budget-MiB>
+# Unpacked size on disk (what `docker image inspect` reports); the registry's
+# compressed copy is smaller. Compare BYTES: integer MiB rounds down, so an
+# 11.5 MiB image would pass an 11 MiB budget.
 set -euo pipefail
-size=$(docker image inspect "$1" --format '{{.Size}}')
-mb=$(( size / 1024 / 1024 ))
-echo "$1: ${mb} MB (budget $2 MB)"
-[ "$mb" -le "$2" ] || { echo "::error::$1 exceeds budget"; exit 1; }
+bytes=$(docker image inspect "$1" --format '{{.Size}}')
+limit=$(( $2 * 1024 * 1024 ))
+echo "$1: $bytes bytes (budget $2 MiB = $limit bytes)"
+[ "$bytes" -le "$limit" ] || { echo "::error::$1 exceeds its size budget"; exit 1; }
 ```
 
+- [ ] Drill both sides of the edge: a budget just **below** the image size exits 1, just above exits 0 (podinfo: 11 MiB fails, 12 passes for an 11.5 MiB image)
 - [ ] Script exits non-zero over budget; wired into CI as **blocking** in P7
 
 ---
@@ -245,6 +249,8 @@ volumes:
 **Type:** Task
 
 - [ ] `scripts/cuj.sh` (curl) or a Playwright/k6 script runs the full journey and exits non-zero on any failure
+- [ ] Assert the **HTTP status**, not a code inside the JSON body: some apps answer 200 with `{"code": 401}` (podinfo upstream did, for every error). Read it with `curl -w '%{http_code}'`
+- [ ] Negative drills: break one thing at a time (no real secret, debug routes on, no build SHA, app down) and check the script fails **only** the step that covers it
 - [ ] Used from now on as the definition of "it works", locally, on KinD (P3), on EKS (P4+), and in the load test (P10)
 
 ---

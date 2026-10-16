@@ -44,6 +44,9 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | `JAVA_OPTS` set but never passed to the JVM | 07 spec | `JAVA_TOOL_OPTIONS` |
 | App code with a hardcoded fallback DB password | 04 | Fail fast if config is missing |
 | Hardening test re-passes flags by hand (`--data-path=/data`), so it never sees that the image's own default differs from where the docs mount the volume | podinfo run | Test the image with its default arguments plus only the documented mounts (P2-4) |
+| Errors answered with HTTP 200 and the real code only in the JSON body; a check that reads the body (or none) passes while clients, load balancers and metrics see success | podinfo run | Assert the HTTP status (`curl -w %{http_code}`); fix the app if it lies (P2-8) |
+| Size gate in whole MB (`size/1024/1024`) rounds down: an 11.5 MiB image passes an 11 MiB budget | podinfo run | Compare bytes; drill just below and just above the budget (P2-5) |
+| `time docker stop` < 2 s used as the SIGTERM test: wrongly fails apps that drain on purpose | podinfo run | Check exit 0 (not 137) before the 10 s SIGKILL; write the drain down |
 | Debug endpoints switched off on the main port only; a metrics or gRPC listener still serves them (Go: `net/http/pprof` on `DefaultServeMux`) | podinfo run | Probe every listener; give each server its own mux; gate the gRPC twins too (P2-4) |
 
 ## Kubernetes basics (P3, P6)

@@ -95,3 +95,54 @@ enough: registries can read it, the app can't.
 **In the Podinfo run:** with `--build-arg REVISION=$(git rev-parse HEAD)`,
 CUJ step 1 returned the full SHA for the first time.
 </details>
+
+---
+
+## P2-8 — Script the CUJ
+
+### 2. "The check says 401, the client sees 200" ★
+
+> **Interviewer:** Your journey script checks that a forged token is
+> rejected, and it passes. A colleague points out the load balancer logs show
+> HTTP 200 for those requests. How can both be true?
+
+<details>
+<summary><b>Model answer</b></summary>
+
+The script read the wrong thing. Some apps put an error code **inside the
+JSON body** and still answer **HTTP 200**. A check that parses the body sees
+`401`; everything outside the app sees success.
+
+**Key points:**
+
+- **Clients and load balancers act on the status line**, not the body. A
+  retry policy, a health check or a WAF rule will treat these errors as fine.
+- **Metrics count status codes.** An error-rate SLO built on them never
+  moves, so alerts never fire.
+- **Assert the HTTP status** in every check (`curl -w '%{http_code}'`), and
+  the body as well where it matters.
+- **Fix the app when it lies**, in one place, with a test that fails if the
+  bug returns.
+
+**Weak answer:** "The body says 401, so it's rejected."
+
+**In the Podinfo run:** upstream's `ErrorResponse` always wrote 200, for all
+18 error paths; an upstream test even asserted 200 for an invalid token. The
+fork now sends the real status, the test expects 401, and reverting the patch
+makes both tests fail. RCA
+`platform/docs/rca/2026-10-15-p2-8-error-status-200.md`.
+</details>
+
+**Follow-ups**
+
+<details>
+<summary><b>2.1</b> "How do you know your journey script can fail at all?"</summary>
+
+Break one thing at a time and check it fails **only** the step that covers
+it: run without the real secret (the forged-token step), switch the debug
+routes on (the route probes), build without the commit SHA (the version
+step), stop the app (readiness). A check that has never failed hasn't been
+tested.
+
+**In the Podinfo run:** each of those four drills failed exactly its own step.
+</details>
