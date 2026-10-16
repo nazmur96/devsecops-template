@@ -5,6 +5,9 @@ Interview practice for [Phase 2](../template/02-containerise.md). Each
 scene and asks an open question, then pushes with follow-ups to see how deep
 your understanding goes.
 
+**New to Phase 2?** Read [Phase 2 explained simply](p2-explained.md) first,
+then come back here to practise.
+
 **How to use it:** treat it as a mock interview. Read the scene, answer out
 loud for about two minutes, *then* open the model answer. Do the follow-ups
 the same way. There is rarely one right answer. The model answer shows the
