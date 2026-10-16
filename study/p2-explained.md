@@ -9,7 +9,7 @@ Examples use the **Podinfo** run (fork
 Lines marked **"In the Podinfo run"** are what actually happened, with the
 measured numbers and the mistakes we hit.
 
-Sections 8 and 9 (the journey script and measuring resources) go slowly,
+Sections 7 and 8 (the journey script and measuring resources) go slowly,
 from zero. Those are the parts most people find hardest.
 
 ---
