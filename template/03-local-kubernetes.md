@@ -237,10 +237,11 @@ spec:
 ```
 
 - [ ] Gateway API standard CRDs + **Envoy Gateway** installed; its data-plane Service reachable on KinD's host ports 80/443 (NodePort + `extraPortMappings`, or MetalLB/`cloud-provider-kind`, P3-11)
-- [ ] `HTTPRoute`s for the path map from `docs/inventory.md` (the same ones you'll use on EKS in P9-3); `sockshop.local` in `/etc/hosts`
+- [ ] `HTTPRoute`s for the path map from `docs/inventory.md` (the same ones you'll use on EKS in P9-3); `sockshop.local` in `/etc/hosts`. Each route lives **with its app's manifests** (`k8s/overlays/…`), not in the platform install: the Gateway is platform, the route is the app's. A platform script that applies app routes breaks the from-scratch order (the app namespace doesn't exist yet)
+- [ ] The gateway's own namespaces (Gateway, controller, cert-manager) get PSA labels too; check with `kubectl label --dry-run=server ns <ns> pod-security.kubernetes.io/enforce=restricted` (no warnings = nothing needs an exception)
 - [ ] cert-manager with its Gateway API support enabled and a **self-signed CA** `ClusterIssuer` (`local-ca`); wildcard cert `*.sockshop.local` issued for the listener; CA trusted locally
 - [ ] HTTP → HTTPS with the standard `RequestRedirect` filter; undefined paths return 404
-- [ ] **Drill:** shorten the cert duration → watch cert-manager reissue it
+- [ ] **Drill:** shorten the cert duration → watch cert-manager reissue it **on schedule**. With a Gateway-shim certificate, the `cert-manager.io/duration` / `renew-before` annotations are read only when cert-manager **creates** the Certificate, and deleting just the Secret reissues once. So: annotate the Gateway, delete the Certificate and its Secret, then watch `status.revision` climb on its own (`1h`/`59m` renews every minute). Restore after
 - [ ] **Negative test:** a namespace without the `gateway-access: public` label can't attach a route
 
 TLS comes with the first gateway, not "later in a security phase" (reference 07).

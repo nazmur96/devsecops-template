@@ -61,6 +61,8 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | `replicas:` and an HPA on the same Deployment | — | Drop `replicas:` |
 | Node-group min/max with no autoscaler | 04 | Karpenter / Cluster Autoscaler |
 | NetworkPolicy never proven enforced | — | Deny test first (P3-7) |
+| App `HTTPRoute`s applied by the platform install script: the from-scratch order fails (app namespace not there yet), and the label check misses them | podinfo run | Routes live with the app's manifests; the platform script installs only the Gateway (P3-6) |
+| Cert renewal "drilled" by deleting the Secret: it reissues once, but never shows renewal on schedule (Gateway duration annotations apply only when the Certificate is created) | podinfo run | Annotate, delete the Certificate and its Secret, watch `status.revision` climb (P3-6) |
 | ClusterRoleBinding described as namespace-wide | 02 | It's cluster-wide; use RoleBinding |
 | Keeping the P6-0 hand deploy after Argo CD takes over (two owners for the same objects) | — | `kubectl delete -k` the overlay before the first sync (P8-2) |
 | Health check on `/` that returns 200 while the database is dead | roadmap | A readiness path that checks what the pod needs (P3-3) |
