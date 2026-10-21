@@ -106,6 +106,10 @@ spec:
     spec:
       serviceAccountName: carts
       automountServiceAccountToken: false
+      # Kubernetes injects CARTS_PORT=tcp://…, CARTS_SERVICE_HOST, … for every
+      # Service in the namespace. An app whose own env prefix matches a
+      # Service name (podinfo reads PODINFO_*) takes them as config.
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
@@ -277,9 +281,15 @@ spec:
 
 Then one allow policy per real call from the dependency diagram (P0-2).
 
-- [ ] **First prove enforcement exists:** with only `default-deny` applied, a `curl` between two pods must **fail**. If it succeeds, your CNI ignores NetworkPolicy. Recent KinD (kindnet) enforces it; otherwise install Calico, or Cilium ([P3-7b](#p3-7b-opt-cilium-instead-of-kindnet-hubble-l7-policy-wireguard))
+- [ ] **First prove enforcement exists:** before any policy, a `curl` to the app must **succeed** (control); with only `default-deny` applied, the same `curl` must **fail**. If it still succeeds, your CNI ignores NetworkPolicy. Recent KinD (kindnet) enforces it; otherwise install Calico, or Cilium ([P3-7b](#p3-7b-opt-cilium-instead-of-kindnet-hubble-l7-policy-wireguard)). **Send the `curl` from a pod whose own egress is open** (a namespace with no policies, or a temporary allow-all-egress for the probe): from inside the default-deny namespace it fails on the *client's* egress, so it proves nothing about the app's ingress
 - [ ] Apply deny-all → watch DNS break → allow DNS → add allows call by call until the CUJ passes
+- [ ] The front-door allow selects the **proxy pods** (namespace *and* pod selector in **one** `from` entry; as two entries it means "any pod in that namespace, or these pods here"). With Envoy Gateway the proxies run in `envoy-gateway-system`, not the `Gateway`'s namespace. On EKS the ALB replaces it, so keep this allow in the local overlay
+- [ ] **Test every allow both ways**, by script: what it must let through (the CUJ), and what it must not. For the front-door allow, that includes a **non-proxy pod in the proxies' namespace**: it's the only probe that catches the split-selector mistake above. Break each allow on purpose (delete it, typo a label, split the selectors) and watch the script fail
 - [ ] **Negative test:** `front-end` cannot reach `carts-db` directly
+
+> kubelet probes come from the node, not a pod: on kindnet, default-deny
+> doesn't block them (pods stay Ready). Test it on your CNI rather than
+> assuming.
 
 > Reference 01 was the only project with NetworkPolicies. Doing it here, with
 > fast feedback, makes it a 1-day task instead of a week of cloud debugging.
@@ -364,6 +374,9 @@ spec:
   while true; do curl -sk -o /dev/null -w '%{http_code}\n' https://sockshop.local/catalogue; done | sort | uniq -c
   ```
   while `kubectl rollout restart deploy/catalogue` runs. Tune `preStop` / grace period until only `200`s appear
+- [ ] **Prove the loop can see a drop** before trusting a clean tally: one control run with `preStop` removed (and any app-side drain skipped) must show non-`200`s. The script must also **fail when the rollout or drain itself fails**: a drain refused by a stray bare pod moves nothing, and its all-`200` tally is a false pass
+- [ ] The same loop while `kubectl drain` takes out each worker in turn. **The front door counts:** Envoy Gateway runs **one** proxy replica by default, so draining its node drops every request while the app is fine. Give the proxy ≥ 2 replicas spread across nodes and a PDB (`EnvoyProxy` `envoyDeployment.replicas`, `envoyPDB`)
+- [ ] Undo drills that used `kubectl set env` with `kubectl set env … VAR-`. A re-apply doesn't remove them: `kubectl apply` merges three ways, and a field that was never in the last-applied config survives (Argo CD self-heal fixes this class in P8)
 - [ ] Document which services don't handle SIGTERM and what you did about it
 - [ ] `make cluster-down && make cluster-up && make deploy` rebuilds everything from scratch
 
@@ -373,11 +386,16 @@ spec:
 
 **Type:** Story · *Now that workloads exist (workstation notes, plane 3)*
 
-- [ ] **Pick one** of Skaffold or Tilt (ADR). Code change → running in the cluster in < 30 s
+- [ ] **Pick one** of Skaffold or Tilt (ADR). Code change → running in the cluster in < 30 s, **measured** from save to served through the Gateway
+- [ ] Tilt prunes the **host's** Docker build cache by default (other projects' too): `docker_prune_settings(disable=True)` in the `Tiltfile`
 - [ ] **mirrord:** run one service from your editor (with a debugger) while it receives the cluster's traffic, env vars and DNS:
   ```bash
-  mirrord exec --target deployment/catalogue -n sock-shop -- go run .
+  mirrord exec -f .mirrord/mirrord.yaml -- ./bin/catalogue   # a built binary, not `go run`
   ```
+  - **The agent is privileged** (host PID, privilege escalation). If the `default` namespace has no PSA labels it lands there **silently**: label `default` `restricted`, and give the agent its own namespace (`agent.namespace`) labelled `privileged`, created only while you use it. That namespace is a PSA exception: write the ADR
+  - **Go:** mirrord loads through `LD_PRELOAD` and skips build tools such as `go`, so `go run .` and any static (`CGO_ENABLED=0`) binary run unhooked: no env, no files, no traffic, and no error. Build a dynamically linked binary (cgo; with no host C compiler, `zig cc` from mise works) and run that
+  - **Files:** check that the local process really reads the pod's files (its mounted Secret): one test is a token issued by a cluster pod validating on the local one. `fs.mode: read` worked for podinfo; `local` + `read_only` did not
+  - **Prove it:** a share of the Gateway's responses comes from the local build (e.g. `/version` shows its commit), and all of it returns to the cluster after Ctrl-C
 - [ ] Documented in `CONTRIBUTING.md`: "to work on service X, run …"
 
 ---
@@ -401,11 +419,15 @@ uses**; only the collector's export target changes.
 | Dashboards | Grafana | Amazon Managed Grafana |
 | Collector | OTel Collector (via the OTel Operator) | ADOT (AWS's OTel Collector) |
 
-- [ ] Installed with Helm into an `observability` namespace, from a committed `values-local.yaml` per chart: `kube-prometheus-stack`, `grafana/loki` (single-binary mode), `grafana/alloy`, `grafana/tempo`, the OpenTelemetry Operator (+ cert-manager from P3-6)
+- [ ] Installed with Helm into an `observability` namespace, from a committed `values-local.yaml` per chart, every version pinned: `kube-prometheus-stack`, `grafana/loki` (single-binary mode), `grafana/alloy`, **`grafana-community/tempo`** (`grafana/tempo` is deprecated and moved), the OpenTelemetry Operator (+ cert-manager from P3-6) **only if** a service needs auto-instrumentation; for SDK-instrumented services Alloy is the collector
+- [ ] **PSA `restricted` on `observability` too**, checked with the server dry-run from P3-6. node-exporter needs the host's PID and network namespaces: turn it off locally, or give it its own namespace and an ADR. Alloy reads pod logs **through the API** (`loki.source.kubernetes`), not a hostPath mount of `/var/log`. With a read-only root filesystem, give Tempo a volume at `/var/tempo` when persistence is off
+- [ ] Never the chart's default Grafana password (`kube-prometheus-stack` ships `prom-operator`): generate a Secret, `grafana.admin.existingSecret`
 - [ ] **Demo-grade on purpose:** one replica, local storage, short retention (24 h). Write that down; production-grade self-hosting is P10-13
-- [ ] Laptop RAM: the stack wants ~3–4 GiB. If the 6-node KinD cluster struggles, use a 1 control-plane + 2 worker variant while this stack runs
+- [ ] Laptop RAM: the stack wants ~1.5–4 GiB (podinfo run: 1.4 GiB working set without node-exporter). If the 6-node KinD cluster struggles, use a 1 control-plane + 2 worker variant while this stack runs
 - [ ] OTel **auto-instrumentation** for Java and Node (`Instrumentation` resource + pod annotation); Go via the SDK
-- [ ] `ServiceMonitor` per service; Grafana data sources wired with **trace ↔ logs ↔ metrics** links (Tempo "trace to logs", Loki derived field on `trace_id`)
+- [ ] `ServiceMonitor` (or `PodMonitor` on a separate metrics port) per service, plus a NetworkPolicy hole for exactly the scrape and the OTLP export; recheck that the metrics port serves nothing else (P2-1a side doors)
+- [ ] Grafana data sources wired with **trace ↔ logs ↔ metrics** links (Tempo "trace to logs", Loki derived field on `trace_id`). **First find where the trace ID really is**: podinfo puts it only in its debug-level request log on stderr, but in every OTLP log record. Tempo's search API drops leading zeros from trace IDs, so match logs by substring, not equality
+- [ ] The SLI counts **user** requests: leave probe paths out, or the kubelet's own calls pad the "good" count
 - [ ] Learn the three query languages by answering:
   - [ ] PromQL: p95 latency of `orders` over 5 minutes
   - [ ] LogQL: all `ERROR` lines from `carts` in the last hour

@@ -61,6 +61,14 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | `replicas:` and an HPA on the same Deployment | — | Drop `replicas:` |
 | Node-group min/max with no autoscaler | 04 | Karpenter / Cluster Autoscaler |
 | NetworkPolicy never proven enforced | — | Deny test first (P3-7) |
+| Enforcement "proven" with a client pod inside the default-deny namespace: its own egress is blocked, so the test passes whatever the app's ingress rule says | podinfo run | Probe from a pod whose egress is open (another namespace, or a temporary egress allow) (P3-7) |
+| Front-door allow with `namespaceSelector` and `podSelector` as two `from` entries: any pod in the proxies' namespace gets in, and probes from other namespaces still pass | podinfo run | One entry with both selectors; probe from a non-proxy pod in that namespace (P3-7) |
+| Drain drill passes on a single-replica gateway proxy only by luck; when the proxy's node drains, every request drops though the app is fine | podinfo run | Gateway data plane ≥ 2 replicas, spread, PDB; drain every worker (P3-8) |
+| Drill script reports a clean tally after the drain itself failed (a stray bare pod blocked it) | podinfo run | The drill fails when the action fails (P3-8) |
+| `kubectl set env` drill "undone" by re-applying the manifests: `apply`'s three-way merge keeps fields it never applied | podinfo run | `kubectl set env … VAR-`; Argo CD self-heal in P8 |
+| `default` namespace without PSA labels: privileged dev tools (mirrord's agent) land there silently | podinfo run | Label `default` `restricted`; the tool gets its own namespace + ADR (P3-9) |
+| `mirrord exec -- go run .` (or a static Go binary): nothing is hooked, no error | podinfo run | Run a dynamically linked build (cgo; `zig cc` from mise) (P3-9) |
+| Service links: a Service named like the app's env prefix injects `<NAME>_PORT=tcp://…` that the app reads as config | podinfo run | `enableServiceLinks: false` (P3-3) |
 | App `HTTPRoute`s applied by the platform install script: the from-scratch order fails (app namespace not there yet), and the label check misses them | podinfo run | Routes live with the app's manifests; the platform script installs only the Gateway (P3-6) |
 | Cert renewal "drilled" by deleting the Secret: it reissues once, but never shows renewal on schedule (Gateway duration annotations apply only when the Certificate is created) | podinfo run | Annotate, delete the Certificate and its Secret, watch `status.revision` climb (P3-6) |
 | ClusterRoleBinding described as namespace-wide | 02 | It's cluster-wide; use RoleBinding |
@@ -143,6 +151,9 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 |---|---|---|
 | No observability | 01, 02, 03, 05 | P10-1..3 |
 | Alerts on CPU instead of symptoms; alerts without runbooks | user list | SLO burn rate + runbooks |
+| SLI counts probe requests: the kubelet's own `/healthz` calls pad the "good" side | podinfo run | Only user paths in the SLI (P3-10) |
+| "Trace to logs" wired to a log stream that has no trace ID (podinfo: only its debug request log on stderr has one; every OTLP log record does) | podinfo run | Find the field first; link the stream that carries it, or write down that the link can't work (P3-10) |
+| Log level assumed to cap what's shipped: podinfo's OTLP log export sends debug lines at `--level=info` | podinfo run | Measure the volume per stream; fix at the source or drop in the collector (P10) |
 | Backups never restored | all | DR drill |
 | `loki-stack` chart / Promtail (both deprecated) | 08 | `grafana/loki` + Alloy |
 | Alert webhook URLs in Helm values in Git | 08 | Secrets Manager → ESO |
