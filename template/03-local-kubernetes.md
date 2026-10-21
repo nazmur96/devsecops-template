@@ -286,6 +286,71 @@ Then one allow policy per real call from the dependency diagram (P0-2).
 - [ ] The front-door allow selects the **proxy pods** (namespace *and* pod selector in **one** `from` entry; as two entries it means "any pod in that namespace, or these pods here"). With Envoy Gateway the proxies run in `envoy-gateway-system`, not the `Gateway`'s namespace. On EKS the ALB replaces it, so keep this allow in the local overlay
 - [ ] **Test every allow both ways**, by script: what it must let through (the CUJ), and what it must not. For the front-door allow, that includes a **non-proxy pod in the proxies' namespace**: it's the only probe that catches the split-selector mistake above. Break each allow on purpose (delete it, typo a label, split the selectors) and watch the script fail
 - [ ] **Negative test:** `front-end` cannot reach `carts-db` directly
+- [ ] An allow trusts **labels**: anyone who can create pods in the allowed namespace can give a pod that label (`app.kubernetes.io/name: prometheus`) and get in. Fine locally; on EKS limit who can create pods there (P5 RBAC, P8 admission)
+
+A starting point for the script; it already avoids both false proofs above.
+Add one `reach`/`blocked` line per allow and per must-not path:
+
+```bash
+#!/usr/bin/env bash
+# scripts/check-netpol.sh: prove the policies both ways. Exit 0 only if all pass.
+# Env: NS (app namespace), TARGET (URL inside the cluster), PROXY_NS (front door's pods)
+set -uo pipefail
+NS=${NS:-sock-shop}; PROXY_NS=${PROXY_NS:-envoy-gateway-system}
+TARGET=${TARGET:-http://front-end.$NS.svc.cluster.local/}
+IMG=busybox:1.37.0   # pin a digest; must pass PSA restricted
+failed=0; ok() { echo "PASS $1"; }; bad() { echo "FAIL $1"; failed=1; }
+
+probe() { # <ns> <name>: restricted-compliant, dies at once (busybox sleep ignores SIGTERM)
+  kubectl apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata: { name: $2, namespace: $1, labels: { netpol-probe: "true" } }
+spec:
+  terminationGracePeriodSeconds: 0
+  automountServiceAccountToken: false
+  securityContext: { runAsNonRoot: true, runAsUser: 65532, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: p
+      image: $IMG
+      command: [sleep, "600"]
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+EOF
+  kubectl -n "$1" wait --for=condition=Ready "pod/$2" --timeout=60s >/dev/null
+}
+reach() { kubectl -n "$1" exec "$2" -- wget -q -T 5 -O /dev/null "$TARGET" 2>/dev/null; }
+trap 'kubectl delete ns netpol-probe --wait=false >/dev/null 2>&1
+      kubectl -n "$NS" delete pod,networkpolicy -l netpol-probe=true --wait=false >/dev/null 2>&1
+      kubectl -n "$PROXY_NS" delete pod netpol-probe --wait=false >/dev/null 2>&1' EXIT
+
+# The last run's cleanup doesn't wait; reusing objects still being deleted fails oddly.
+kubectl delete ns netpol-probe --ignore-not-found --wait=true >/dev/null
+kubectl -n "$NS" delete pod netpol-probe --ignore-not-found --wait=true >/dev/null
+kubectl -n "$PROXY_NS" delete pod netpol-probe --ignore-not-found --wait=true >/dev/null
+kubectl create ns netpol-probe >/dev/null && kubectl label ns netpol-probe pod-security.kubernetes.io/enforce=restricted >/dev/null
+probe netpol-probe outside; probe "$NS" netpol-probe; probe "$PROXY_NS" netpol-probe
+
+kubectl -n "$NS" exec netpol-probe -- nslookup kubernetes.default.svc.cluster.local >/dev/null 2>&1 && ok "DNS from $NS" || bad "DNS from $NS"
+reach netpol-probe outside && bad "another namespace reached the app" || ok "another namespace blocked"
+# Same namespace: open the probe's OWN egress first, or it fails for the wrong reason.
+kubectl apply -f - >/dev/null <<EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: probe-egress, namespace: $NS, labels: { netpol-probe: "true" } }
+spec: { podSelector: { matchLabels: { netpol-probe: "true" } }, policyTypes: [Egress], egress: [{}] }
+EOF
+sleep 2
+kubectl -n "$NS" exec netpol-probe -- nc -z -w 5 kubernetes.default.svc.cluster.local 443 2>/dev/null \
+  || bad "probe egress didn't open: check 'same namespace' would prove nothing"
+reach "$NS" netpol-probe && bad "a pod in $NS reached the app" || ok "same namespace blocked"
+# Catches namespaceSelector and podSelector written as two `from` entries.
+reach "$PROXY_NS" netpol-probe && bad "non-proxy pod in $PROXY_NS got in (allow too broad)" || ok "non-proxy pod in $PROXY_NS blocked"
+scripts/cuj.sh >/dev/null && ok "CUJ through the front door" || bad "CUJ through the front door"
+exit "$failed"
+```
+
+Run it once **before** any policy (the "blocked" checks must fail: that's the
+control), then after each policy you add.
 
 > kubelet probes come from the node, not a pod: on kindnet, default-deny
 > doesn't block them (pods stay Ready). Test it on your CNI rather than
@@ -369,11 +434,26 @@ spec:
 
 - [ ] CUJ passes over HTTPS
 - [ ] Data survives deleting **every** application pod, then every data-store pod
-- [ ] **Rolling update with zero dropped requests** under a continuous load loop:
+- [ ] **Rolling update with zero dropped requests** under a continuous load loop while `kubectl rollout restart deploy/catalogue` runs. Tune `preStop` / grace period until only `200`s appear. A starting point that fails both on a dropped request and on an action that didn't happen:
   ```bash
-  while true; do curl -sk -o /dev/null -w '%{http_code}\n' https://sockshop.local/catalogue; done | sort | uniq -c
+  #!/usr/bin/env bash
+  # scripts/rollout-drill.sh restart <deploy> | drain <node>
+  # Env: NS, URL (through the front door, e.g. https://sockshop.local/catalogue)
+  set -uo pipefail
+  NS=${NS:-sock-shop}; URL=${URL:-https://sockshop.local/catalogue}
+  out=$(mktemp); stop=$out.stop; trap 'rm -f "$out" "$stop"' EXIT
+  ( while [ ! -f "$stop" ]; do curl -s -o /dev/null -w '%{http_code}\n' -m 5 "$URL" >>"$out"; done ) &
+  sleep 3; action_ok=1   # a baseline before anything moves
+  case $1 in
+    restart) kubectl -n "$NS" rollout restart "deploy/$2" && kubectl -n "$NS" rollout status "deploy/$2" --timeout=180s || action_ok=0 ;;
+    drain)   kubectl drain "$2" --ignore-daemonsets --delete-emptydir-data --timeout=180s || action_ok=0 ;;
+  esac
+  sleep 10; touch "$stop"; wait   # old pods finish terminating while the loop runs
+  [ "$1" = drain ] && kubectl uncordon "$2"
+  sort "$out" | uniq -c
+  [ "$action_ok" = 1 ] || { echo "FAIL the $1 itself failed: the tally proves nothing"; exit 1; }
+  [ "$(grep -vc '^200$' "$out")" = 0 ]
   ```
-  while `kubectl rollout restart deploy/catalogue` runs. Tune `preStop` / grace period until only `200`s appear
 - [ ] **Prove the loop can see a drop** before trusting a clean tally: one control run with `preStop` removed (and any app-side drain skipped) must show non-`200`s. The script must also **fail when the rollout or drain itself fails**: a drain refused by a stray bare pod moves nothing, and its all-`200` tally is a false pass
 - [ ] The same loop while `kubectl drain` takes out each worker in turn. **The front door counts:** Envoy Gateway runs **one** proxy replica by default, so draining its node drops every request while the app is fine. Give the proxy ≥ 2 replicas spread across nodes and a PDB (`EnvoyProxy` `envoyDeployment.replicas`, `envoyPDB`)
 - [ ] Undo drills that used `kubectl set env` with `kubectl set env … VAR-`. A re-apply doesn't remove them: `kubectl apply` merges three ways, and a field that was never in the last-applied config survives (Argo CD self-heal fixes this class in P8)
@@ -420,7 +500,7 @@ uses**; only the collector's export target changes.
 | Collector | OTel Collector (via the OTel Operator) | ADOT (AWS's OTel Collector) |
 
 - [ ] Installed with Helm into an `observability` namespace, from a committed `values-local.yaml` per chart, every version pinned: `kube-prometheus-stack`, `grafana/loki` (single-binary mode), `grafana/alloy`, **`grafana-community/tempo`** (`grafana/tempo` is deprecated and moved), the OpenTelemetry Operator (+ cert-manager from P3-6) **only if** a service needs auto-instrumentation; for SDK-instrumented services Alloy is the collector
-- [ ] **PSA `restricted` on `observability` too**, checked with the server dry-run from P3-6. node-exporter needs the host's PID and network namespaces: turn it off locally, or give it its own namespace and an ADR. Alloy reads pod logs **through the API** (`loki.source.kubernetes`), not a hostPath mount of `/var/log`. With a read-only root filesystem, give Tempo a volume at `/var/tempo` when persistence is off
+- [ ] **PSA `restricted` on `observability` too**, checked with the server dry-run from P3-6. node-exporter needs the host's PID and network namespaces: turn it off locally, or give it its own namespace and an ADR. Alloy reads pod logs **through the API** (`loki.source.kubernetes`), not a hostPath mount of `/var/log`. With a read-only root filesystem, give Tempo a volume at `/var/tempo` when persistence is off. After fixing a crash-looping **StatefulSet** with `helm upgrade`, delete its pod: a StatefulSet doesn't replace a pod that never became Ready, so the old broken pod keeps running and `--wait` times out
 - [ ] Never the chart's default Grafana password (`kube-prometheus-stack` ships `prom-operator`): generate a Secret, `grafana.admin.existingSecret`
 - [ ] **Demo-grade on purpose:** one replica, local storage, short retention (24 h). Write that down; production-grade self-hosting is P10-13
 - [ ] Laptop RAM: the stack wants ~1.5–4 GiB (podinfo run: 1.4 GiB working set without node-exporter). If the 6-node KinD cluster struggles, use a 1 control-plane + 2 worker variant while this stack runs
