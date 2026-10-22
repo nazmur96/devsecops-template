@@ -25,10 +25,6 @@ way you would say it out loud: short paragraphs or **Key points:** bullets,
 never a table. Cite the file/line, ADR or RCA that proves it. Never renumber
 existing cases or follow-ups.
 
-**Case numbers are IDs.** Cases 1-4 were written first (P3-7 to P3-10);
-cases 5-7 cover P3-1 to P3-6. Sections follow the phase order, so the
-numbers don't run in order down the page.
-
 ---
 
 *Cases are added as the Podinfo run reaches each ticket (P4-1 first).*
