@@ -14,7 +14,7 @@ production-grade platform on AWS EKS, one provable step at a time.**
 ![Tickets](https://img.shields.io/badge/tickets-143-informational)
 ![Cost P0–P3](https://img.shields.io/badge/cost_P0--P3-%240-success)
 
-[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md) · Explained simply: [Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md), [Phase 2](study/p2-explained.md) · Interview cases: [Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md), [Phase 2](study/p2-containerise.md), [Phase 3](study/p3-local-kubernetes.md)
+[**Start the template →**](template/README.md) · [Phase 0](template/00-inherit-and-plan.md) · [Common mistakes](template/COMMON-MISTAKES.md) · [Day-2 operations](template/DAY-2-OPERATIONS.md) · [The guide](DEVSECOPS-GUIDE.md) · Explained simply: [Phase 0](study/p0-explained.md), [Phase 1](study/p1-explained.md), [Phase 2](study/p2-explained.md), [Phase 3](study/p3-explained.md) · Interview cases: [Phase 0](study/p0-inherit-and-plan.md), [Phase 1](study/p1-dev-environment.md), [Phase 2](study/p2-containerise.md), [Phase 3](study/p3-local-kubernetes.md)
 
 </div>
 

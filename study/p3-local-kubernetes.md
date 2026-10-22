@@ -15,6 +15,9 @@ interviewer stop listening.
 evidence from the [Podinfo fork](https://github.com/nazmur96/podinfo) and its
 platform repo. Use them as interview stories.
 
+**New to Phase 3?** Read [Phase 3 explained simply](p3-explained.md) first,
+then come back here to practise.
+
 `★` = came from a real finding or mistake in a run.
 
 **Adding a question:** add a follow-up under the case it belongs to (next
@@ -23,6 +26,174 @@ Phrase it as something an interviewer would say. Write the model answer the
 way you would say it out loud: short paragraphs or **Key points:** bullets,
 never a table. Cite the file/line, ADR or RCA that proves it. Never renumber
 existing cases or follow-ups.
+
+**Case numbers are IDs.** Cases 1-4 were written first (P3-7 to P3-10);
+cases 5-7 cover P3-1 to P3-6. Sections follow the phase order, so the
+numbers don't run in order down the page.
+
+---
+
+## P3-1 — The local cluster
+
+### 5. "Why not just learn Kubernetes on EKS?"
+
+> **Interviewer:** You spent a whole phase on a cluster that runs on a
+> laptop. Why not go straight to EKS? And why three control-plane nodes on
+> a laptop?
+
+<details>
+<summary><b>Model answer</b></summary>
+
+Because a local cluster removes two of the three hard things at once: AWS
+networking and IAM, and a running bill. What's left is Kubernetes itself,
+and that's where the drills are: stop nodes, cut the network, kill pods
+mid-request. Free and rebuilt in minutes, you do them ten times instead of
+once. Then you re-verify on EKS knowing what "working" looks like.
+
+**Key points:**
+
+- **Same minor version** as kubectl and EKS, or a manifest can pass here
+  and fail there.
+- **Three control planes** so etcd keeps quorum: two of three still form a
+  majority, so you can drill losing one. With two, losing one freezes the
+  cluster.
+- **PSA labels from day one**, so the security profile is learned cheaply.
+- **Rescheduling isn't instant:** a node that goes silent is presumed alive
+  for 300 s (the default `not-ready`/`unreachable` toleration). Expect that
+  number in a drill and explain it.
+
+**In the Podinfo run:** a stopped worker's pods moved after **355 s**
+(300 s + ~55 s); with one control plane stopped, the API still answered.
+
+**Weak answer:** "Local is cheaper." True, but it misses the point: it's
+where you can afford to break things.
+
+</details>
+
+**5.1 — "Your laptop resolves the hostname to IPv6 first. You add an IPv6
+port mapping to fix it. What happens?"** ★
+
+<details>
+<summary><b>Model answer</b></summary>
+
+Possibly the opposite of a fix. Without an IPv6 mapping, the IPv6 attempt
+is **refused** at once and the client falls back to IPv4, which works. With
+a mapping, Docker *accepts* the IPv6 connection and forwards it to an
+address an IPv4-only cluster doesn't serve, so the connection hangs and the
+client never falls back. Test both before adding a "fix".
+
+**In the Podinfo run:** IPv4-only mapping → 200 via fallback; adding
+`listenAddress: "::"` → 000. Documented in `kind/cluster.yaml`.
+
+</details>
+
+---
+
+## P3-2 / P3-3 — Manifests and the workload
+
+### 6. "Prove your readiness probe works" ★
+
+> **Interviewer:** You want to show that an unready pod gets no traffic.
+> You deploy a copy of the app with a flag that makes it report not-ready,
+> check that it isn't in the Service's endpoints, and call it proven. Is it?
+
+<details>
+<summary><b>Model answer</b></summary>
+
+Only if the Service would have selected that pod in the first place. If the
+copy has different labels from the ones the Service selects, it was never
+going to appear in its endpoints, ready or not. "Not in the endpoints" is
+then true either way, and the test proves nothing.
+
+**Key points:**
+
+- Put the test pod **behind a Service that selects it**, and check the
+  endpoint reads `ready=false`.
+- Then **remove the flag** and watch it flip to `ready=true`. A test that
+  sees both states can fail; one that sees only the expected state may not.
+- Same idea for liveness: the restart count must climb.
+- And keep liveness free of dependencies: if it checks the database, one
+  blip restarts every pod at once.
+
+**In the Podinfo run:** the first readiness test used a copy with another
+`instance` label: never behind the real Service. The review rebuilt it with
+its own Service and the flip both ways.
+
+</details>
+
+**6.1 — "How do you check every object has your standard labels?"** ★
+
+<details>
+<summary><b>Model answer</b></summary>
+
+With a script that **derives** the list of objects from what you deploy
+(render the kustomize overlay, check each object it produces, plus the ones
+your scripts create, like the Secret). A hand-written list goes stale with
+the first new manifest, and the check keeps passing while it checks less
+and less.
+
+And keep the **selector** to labels that never change (`name`, `instance`):
+selectors are immutable, so anything else there blocks later changes.
+
+**In the Podinfo run:** the first `check-labels.sh` had a hardcoded list;
+the review made it render the overlay, and fail naming the object and the
+missing label.
+
+</details>
+
+---
+
+## P3-6 — Gateway API and TLS
+
+### 7. "Who owns the route?" ★
+
+> **Interviewer:** Your platform team installs the Gateway and, in the same
+> script, applies every app's HTTPRoute. It worked on the existing cluster.
+> What's wrong with it?
+
+<details>
+<summary><b>Model answer</b></summary>
+
+Ownership and order. The Gateway (listeners, certificates, which
+namespaces may attach) is the platform's. A route (this hostname, these
+paths, this backend) is the app's: it changes when the app changes, and it
+belongs in the app's manifests. Put it in the platform script and a fresh
+cluster breaks: the platform installs first, the app's namespace doesn't
+exist yet, and the route can't be created. It also hides the route from
+the app's own checks (labels, review).
+
+**Key points:**
+
+- Routes **with the app**; the Gateway allows attachment by namespace label
+  (`gateway-access: public`), and a namespace without it is refused.
+- Routes as an **allow-list**: exact paths the user journey needs, so
+  everything else gets a 404 at the door.
+- The front door's own namespaces get PSA too; a server dry-run of the
+  label shows what would need an exception.
+
+**In the Podinfo run:** the from-scratch order failed until podinfo's
+`HTTPRoute` moved to `k8s/overlays/dev`; the negative (an unlabelled
+namespace) came back `NotAllowedByListeners`.
+
+</details>
+
+**7.1 — "How do you prove certificates renew?"** ★
+
+<details>
+<summary><b>Model answer</b></summary>
+
+Shorten the lifetime and watch renewal happen **on schedule**, not once.
+Deleting the certificate's Secret only makes cert-manager reissue it one
+time, which proves issuance, not renewal. With a Gateway-managed
+certificate, the duration annotations are read only when cert-manager
+creates the Certificate, so: annotate the Gateway, delete the Certificate
+and its Secret, then watch `status.revision` climb on its own (a 1 h
+lifetime renewed 59 min early renews every minute). Restore afterwards.
+
+**In the Podinfo run:** revision went 1 → 2 → 3 unattended, and Envoy
+served each new certificate.
+
+</details>
 
 ---
 
