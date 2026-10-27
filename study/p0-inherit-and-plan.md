@@ -1620,6 +1620,42 @@ now you operate etcd yourself.
 the self-managed option was added later (P0-13 now requires it).
 </details>
 
+<details>
+<summary><b>24.6</b> "You've inherited a kops cluster. How is it run, and how would you move it to EKS?"</summary>
+
+First I check it's run as code. The cluster spec and instance groups are YAML
+in Git, applied with `kops replace -f` then `kops update cluster --yes`.
+kops's own state lives in an S3 bucket (`KOPS_STATE_STORE`), which I treat
+like Terraform state: versioned, encrypted, locked down. Many teams have kops
+write Terraform (`--target=terraform`) so changes get a reviewed plan.
+
+The work EKS would otherwise do is mine: **etcd backups** (etcd-manager to
+S3, with restores rehearsed), **control-plane upgrades** (new `kops` binary →
+`kops upgrade cluster` → `update` → `rolling-update`, control plane first,
+then workers one instance group at a time), and certificates. Pod IAM is
+IRSA with kops publishing the OIDC issuer; there's no Pod Identity.
+
+To move to EKS I'd go **blue/green, never in place**:
+
+1. Build EKS alongside, in Terraform.
+2. Point GitOps (Argo CD) at both clusters with the same manifests; fix
+   what's kops-specific (IRSA wiring, storage classes, LB annotations).
+3. Move state: Velero for volumes, or better, data moved to RDS first.
+4. Shift traffic with weighted DNS or ALB target groups (5 → 50 → 100%),
+   watching SLOs at each step, old cluster kept for rollback.
+5. Delete the kops cluster after a set period at 100%.
+
+**Key points:**
+- Above the control plane, kops and EKS look the same (Argo CD, Helm,
+  Kyverno); the difference is who owns etcd, upgrades and certificates.
+- The migration is the same pattern as a blue/green cluster upgrade.
+- Ask *why* it's on kops before proposing a move: if it needs control-plane
+  flags EKS hides, the migration may not be worth it.
+
+**Weak answer:** "Convert it in place," or a migration plan with no
+rollback and no word about state.
+</details>
+
 ---
 
 ## How we work
