@@ -16,6 +16,8 @@ you can see it in context (`../reference/NN-*.md`). **Read the section for a pha
 | "Tests passed" assumed to mean "deployed" (nobody agreed who promotes or rolls back) | roadmap | The ownership contract (P0-11b) |
 | Kubernetes chosen with no stated reason, or "because it's on job ads" passed off as architecture | roadmap | The "why EKS" ADR (P0-13) |
 | Extra clusters "for safety" with no named trigger | roadmap | Each cluster needs a reason (P0-6, README "Scale the template") |
+| A different Kubernetes distribution in staging than in prod (kops staging, EKS prod) "to save money" | podinfo run | Same platform dev → prod; only size and count differ. Local kind is the inner loop, not an environment (P0-13) |
+| "Why EKS" ADR compares only Lambda/ECS/EKS, never self-managed Kubernetes | podinfo run | List kops/kubeadm as an option and say why not (P0-13) |
 
 ## Workstation & dev env (P1)
 

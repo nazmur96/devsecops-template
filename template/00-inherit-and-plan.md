@@ -521,6 +521,28 @@ Lambda. Know the framework even though you'll build on EKS.
 and scheduled jobs (like the auto-remediation in P10-5c), and Fargate for a
 few isolated workloads. "Which platform" is a per-workload question.
 
+**Managed or self-managed Kubernetes?** Once you've chosen Kubernetes on AWS,
+there's a second choice: EKS, or running the control plane yourself on EC2
+with **kops** (or kubeadm). kops is real and still maintained. Many
+organisations run it because they built their clusters before EKS existed
+(kops dates from 2016; EKS became generally available in June 2018), or
+because they want control-plane flags EKS doesn't expose. The rules:
+
+- **Choose per purpose, not per environment.** A laptop cluster (kind,
+  minikube) for the inner loop is fine (P3). But dev, staging and prod run the
+  **same** platform. A kops staging cluster in front of an EKS prod tests a
+  different platform: Pod Identity, access entries and managed add-ons are
+  EKS-only, so the identity and upgrade paths you rehearse aren't the ones
+  prod uses.
+- **It doesn't save money.** A highly available control plane is 3 EC2
+  instances, etcd volumes and a state bucket. That's in the same range as
+  EKS's ~$73/month, and you also operate etcd, its backups and control-plane
+  upgrades yourself.
+- **Choose kops (or Talos, kubeadm) when** you need control-plane access EKS
+  won't give you, you're already on it and migrating isn't worth it yet, or
+  you're *learning* to run a control plane. For that last one, a homelab
+  (Talos on Proxmox) teaches it without an AWS bill.
+
 **What usually decides the shape** (from six common company types):
 
 | Situation | Typical answer |
@@ -537,6 +559,7 @@ edge, and what you leave out is the real decision.**
 
 - [ ] The "why EKS" ADR written: the options, the choice, **the case against your own choice**, the ongoing cost (upgrades, patching, on-call), and the **reversal cost** (images are portable; manifests → task definitions is weeks, not a rewrite)
 - [ ] The ADR names what would change your mind
+- [ ] The options include **self-managed Kubernetes** (kops/kubeadm on EC2), not only Lambda, ECS and EKS
 
 ---
 

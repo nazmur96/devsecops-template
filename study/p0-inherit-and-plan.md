@@ -1595,6 +1595,31 @@ and scheduled jobs, Fargate for a few isolated workloads. "Which platform"
 is a per-workload question, not a company-wide religion.
 </details>
 
+<details>
+<summary><b>24.5</b> ★ "We run kops for staging and EKS for prod, to save money. Good idea?"</summary>
+
+No. Staging exists to rehearse prod, and this rehearses a different platform.
+Pod Identity, access entries and managed add-ons are EKS-only, so on kops
+you'd wire IRSA by hand and upgrade with kops's own flow. The identity and
+upgrade paths prod depends on then run for the first time in prod.
+
+It doesn't save much either: a highly available kops control plane is three
+EC2 instances plus etcd volumes, in the same range as EKS's ~$73/month, and
+now you operate etcd yourself.
+
+**Key points:**
+- Choose a platform per *purpose*, not per environment: kind or minikube on a
+  laptop for the inner loop is fine; dev, staging and prod share one platform.
+- kops is a legitimate choice for **all** environments, typically in
+  organisations that built clusters before EKS (GA June 2018) or need
+  control-plane flags EKS hides.
+- To save money on staging, make it smaller or turn it off at night, not
+  different.
+
+**In the Podinfo run:** ADR-0009 first compared only Lambda, ECS and EKS;
+the self-managed option was added later (P0-13 now requires it).
+</details>
+
 ---
 
 ## How we work
